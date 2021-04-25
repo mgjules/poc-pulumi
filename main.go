@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 )
 
@@ -18,8 +20,17 @@ func main() {
 }
 
 func run() error {
+	var cfg config
+	if err := envconfig.Process("", &cfg); err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+
 	if err := installAWSPlugin(context.TODO()); err != nil {
 		return fmt.Errorf("install AWS plugins: %w", err)
+	}
+
+	if err := loginBackend(cfg.BackendURL); err != nil {
+		return fmt.Errorf("backend login: %w", err)
 	}
 
 	router := gin.Default()
@@ -32,7 +43,7 @@ func run() error {
 		api.DELETE("/environments/:name", deleteEnvironment())
 	}
 
-	if err := router.Run(":13337"); err != nil {
+	if err := router.Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
 		return err
 	}
 
@@ -50,4 +61,9 @@ func installAWSPlugin(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func loginBackend(url string) error {
+	cmd := exec.Command("pulumi", "login", url)
+	return cmd.Run()
 }
