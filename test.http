@@ -25,6 +25,7 @@ PUT http://localhost:13337/api/environments/mike
 Content-Type: application/json
 
 {
+    "name": "mike",
     "aws_access_key_id": "{{$dotenv AWS_ACCESS_KEY_ID}}",
     "aws_secret_access_key": "{{$dotenv AWS_SECRET_ACCESS_KEY}}",
     "aws_region": "{{$dotenv AWS_REGION}}"

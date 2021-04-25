@@ -11,12 +11,16 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 )
 
+type awsCredentials struct {
+	AWSAccessKeyID     string `json:"aws_access_key_id" binding:"required"`
+	AWSSecretAccessKey string `json:"aws_secret_access_key" binding:"required"`
+	AWSRegion          string `json:"aws_region" binding:"required"`
+}
+
 func createEnvironment() gin.HandlerFunc {
 	type request struct {
-		Name               string `json:"name" binding:"required"`
-		AWSAccessKeyID     string `json:"aws_access_key_id" binding:"required"`
-		AWSSecretAccessKey string `json:"aws_secret_access_key" binding:"required"`
-		AWSRegion          string `json:"aws_region" binding:"required"`
+		environment
+		awsCredentials
 	}
 
 	return func(c *gin.Context) {
@@ -26,15 +30,19 @@ func createEnvironment() gin.HandlerFunc {
 			return
 		}
 
-		ctx := c.Request.Context()
-		stackName := req.Name
-		prog := infra(stackName)
+		if err := req.environment.validate(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
+			return
+		}
 
-		s, err := auto.NewStackInlineSource(ctx, stackName, project, prog, auto.WorkDir("."))
+		ctx := c.Request.Context()
+		envName := req.Name
+
+		s, err := auto.NewStackInlineSource(ctx, envName, project, infra(req.environment), auto.WorkDir("."))
 		if err != nil {
 			// if stack already exists, 409
 			if auto.IsCreateStack409Error(err) {
-				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already exists", stackName)})
+				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already exists", envName)})
 				return
 			}
 
@@ -53,7 +61,7 @@ func createEnvironment() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, gin.H{
-			"name": stackName,
+			"name": envName,
 			"todo": upRes.Outputs["TODO"].Value.(string),
 		})
 	}
@@ -61,9 +69,7 @@ func createEnvironment() gin.HandlerFunc {
 
 func getEnvironment() gin.HandlerFunc {
 	type request struct {
-		AWSAccessKeyID     string `json:"aws_access_key_id" binding:"required"`
-		AWSSecretAccessKey string `json:"aws_secret_access_key" binding:"required"`
-		AWSRegion          string `json:"aws_region" binding:"required"`
+		awsCredentials
 	}
 
 	return func(c *gin.Context) {
@@ -74,14 +80,13 @@ func getEnvironment() gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		stackName := c.Param("name")
-		prog := infra(stackName)
+		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, stackName, project, prog, auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, project, infra(environment{}), auto.WorkDir("."))
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", stackName)})
+				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
@@ -100,7 +105,7 @@ func getEnvironment() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"name": stackName,
+			"name": envName,
 			"todo": outs["TODO"].Value.(string),
 		})
 	}
@@ -108,9 +113,8 @@ func getEnvironment() gin.HandlerFunc {
 
 func updateEnvironment() gin.HandlerFunc {
 	type request struct {
-		AWSAccessKeyID     string `json:"aws_access_key_id" binding:"required"`
-		AWSSecretAccessKey string `json:"aws_secret_access_key" binding:"required"`
-		AWSRegion          string `json:"aws_region" binding:"required"`
+		environment
+		awsCredentials
 	}
 
 	return func(c *gin.Context) {
@@ -121,14 +125,13 @@ func updateEnvironment() gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		stackName := c.Param("name")
-		prog := infra(stackName)
+		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, stackName, project, prog, auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, project, infra(req.environment), auto.WorkDir("."))
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", stackName)})
+				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
@@ -143,7 +146,7 @@ func updateEnvironment() gin.HandlerFunc {
 		upRes, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
 		if err != nil {
 			if auto.IsConcurrentUpdateError(err) {
-				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in progress", stackName)})
+				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in infraress", envName)})
 				return
 			}
 
@@ -152,7 +155,7 @@ func updateEnvironment() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"name": stackName,
+			"name": envName,
 			"todo": upRes.Outputs["TODO"].Value.(string),
 		})
 	}
@@ -160,9 +163,7 @@ func updateEnvironment() gin.HandlerFunc {
 
 func deleteEnvironment() gin.HandlerFunc {
 	type request struct {
-		AWSAccessKeyID     string `json:"aws_access_key_id" binding:"required"`
-		AWSSecretAccessKey string `json:"aws_secret_access_key" binding:"required"`
-		AWSRegion          string `json:"aws_region" binding:"required"`
+		awsCredentials
 	}
 
 	return func(c *gin.Context) {
@@ -173,13 +174,12 @@ func deleteEnvironment() gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		stackName := c.Param("name")
-		prog := infra(stackName)
+		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, stackName, project, prog, auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, project, infra(environment{}), auto.WorkDir("."))
 		if err != nil {
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", stackName)})
+				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
@@ -195,13 +195,13 @@ func deleteEnvironment() gin.HandlerFunc {
 			return
 		}
 
-		if err = s.Workspace().RemoveStack(ctx, stackName); err != nil {
+		if err = s.Workspace().RemoveStack(ctx, envName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"msg": fmt.Sprintf("environment %q deleted", stackName),
+			"msg": fmt.Sprintf("environment %q deleted", envName),
 		})
 	}
 }
