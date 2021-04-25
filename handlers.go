@@ -30,7 +30,7 @@ func createEnvironment() gin.HandlerFunc {
 			return
 		}
 
-		if err := req.environment.validate(); err != nil {
+		if err := req.environment.Validate(); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
 			return
 		}
