@@ -1,5 +1,6 @@
 tmp
 .env
 pulumi
+Pulumi.*.yaml
 poc-pulumi
 .pulumi
