@@ -146,7 +146,7 @@ func updateEnvironment() gin.HandlerFunc {
 		upRes, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
 		if err != nil {
 			if auto.IsConcurrentUpdateError(err) {
-				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in infraress", envName)})
+				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in progress", envName)})
 				return
 			}
 
