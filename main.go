@@ -11,7 +11,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 )
 
-const project = "bus"
+const _project = "bus"
 
 func main() {
 	if err := run(); err != nil {

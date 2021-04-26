@@ -38,7 +38,7 @@ func createEnvironment() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := req.Name
 
-		s, err := auto.NewStackInlineSource(ctx, envName, project, infra(req.environment), auto.WorkDir("."))
+		s, err := auto.NewStackInlineSource(ctx, envName, _project, infra(req.environment), auto.WorkDir("."))
 		if err != nil {
 			// if stack already exists, 409
 			if auto.IsCreateStack409Error(err) {
@@ -82,7 +82,7 @@ func getEnvironment() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, project, infra(environment{}), auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, _project, infra(environment{}), auto.WorkDir("."))
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -127,7 +127,7 @@ func updateEnvironment() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, project, infra(req.environment), auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, _project, infra(req.environment), auto.WorkDir("."))
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -176,7 +176,7 @@ func deleteEnvironment() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, project, infra(environment{}), auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, _project, infra(environment{}), auto.WorkDir("."))
 		if err != nil {
 			if auto.IsSelectStack404Error(err) {
 				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", envName)})
