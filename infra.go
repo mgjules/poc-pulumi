@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -46,6 +47,19 @@ func infra(env environment) pulumi.RunFunc {
 			"RSB_ENV": env.Name,
 			"Name":    env.Name,
 		})
+
+		// Resource Group
+		_, err := resourcegroups.NewGroup(ctx, "rg-"+env.Name, &resourcegroups.GroupArgs{
+			Name:        pulumi.String(env.Name),
+			Description: pulumi.String("Everything tagged " + env.Name),
+			ResourceQuery: &resourcegroups.GroupResourceQueryArgs{
+				Query: pulumi.String(fmt.Sprintf("{\"ResourceTypeFilters\": [\"AWS::AllSupported\"], \"TagFilters\": [{\"Key\": \"RSB_ENV\", \"Values\": [\"%s\"]}]}", env.Name)),
+			},
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating resource group: %w", err)
+		}
 
 		// VPC
 		vpc, err := ec2.NewVpc(ctx, "vpc-"+env.Name, &ec2.VpcArgs{
