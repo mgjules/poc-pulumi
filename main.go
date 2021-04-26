@@ -38,9 +38,9 @@ func run() error {
 	api := router.Group("/api")
 	{
 		api.POST("/environments", createEnvironment(cfg))
-		api.GET("/environments/:name", getEnvironment())
+		api.GET("/environments/:name", getEnvironment(cfg))
 		api.PUT("/environments/:name", updateEnvironment(cfg))
-		api.DELETE("/environments/:name", deleteEnvironment())
+		api.DELETE("/environments/:name", deleteEnvironment(cfg))
 	}
 
 	if err := router.Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {

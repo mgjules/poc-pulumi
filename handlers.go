@@ -11,12 +11,6 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 )
 
-type awsCredentials struct {
-	AWSAccessKeyID     string `json:"aws_access_key_id" binding:"required"`
-	AWSSecretAccessKey string `json:"aws_secret_access_key" binding:"required"`
-	AWSRegion          string `json:"aws_region" binding:"required"`
-}
-
 func createEnvironment(cfg config) gin.HandlerFunc {
 	type request struct {
 		environment
@@ -35,6 +29,7 @@ func createEnvironment(cfg config) gin.HandlerFunc {
 			return
 		}
 
+		req.awsCredentials.SetDefaults(cfg)
 		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
@@ -69,7 +64,7 @@ func createEnvironment(cfg config) gin.HandlerFunc {
 	}
 }
 
-func getEnvironment() gin.HandlerFunc {
+func getEnvironment(cfg config) gin.HandlerFunc {
 	type request struct {
 		awsCredentials
 	}
@@ -80,6 +75,8 @@ func getEnvironment() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
 			return
 		}
+
+		req.awsCredentials.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
@@ -131,6 +128,7 @@ func updateEnvironment(cfg config) gin.HandlerFunc {
 			return
 		}
 
+		req.awsCredentials.SetDefaults(cfg)
 		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
@@ -170,7 +168,7 @@ func updateEnvironment(cfg config) gin.HandlerFunc {
 	}
 }
 
-func deleteEnvironment() gin.HandlerFunc {
+func deleteEnvironment(cfg config) gin.HandlerFunc {
 	type request struct {
 		awsCredentials
 	}
@@ -181,6 +179,8 @@ func deleteEnvironment() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
 			return
 		}
+
+		req.awsCredentials.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
