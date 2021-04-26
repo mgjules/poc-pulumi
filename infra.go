@@ -222,7 +222,7 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating security group: %w", err)
 		}
 
-		// TODO: implement current infra setup (bastion+ecs+fargate+mq)
+		// TODO: implement current infra setup (ssl+apigw+bastion+mq+cache+ecs+fargate)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
