@@ -62,7 +62,7 @@ func createEnvironment() gin.HandlerFunc {
 
 		c.JSON(http.StatusCreated, gin.H{
 			"name": envName,
-			"todo": upRes.Outputs["TODO"].Value.(string),
+			"vpc":  upRes.Outputs["vpc"].Value,
 		})
 	}
 }
@@ -106,7 +106,7 @@ func getEnvironment() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"name": envName,
-			"todo": outs["TODO"].Value.(string),
+			"vpc":  outs["vpc"].Value,
 		})
 	}
 }
@@ -156,7 +156,7 @@ func updateEnvironment() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"name": envName,
-			"todo": upRes.Outputs["TODO"].Value.(string),
+			"vpc":  upRes.Outputs["vpc"].Value,
 		})
 	}
 }
