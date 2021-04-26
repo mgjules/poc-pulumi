@@ -51,7 +51,7 @@ func infra(env environment) pulumi.RunFunc {
 			Name:        pulumi.String(env.Name),
 			Description: pulumi.String("Everything tagged " + env.Name),
 			ResourceQuery: &resourcegroups.GroupResourceQueryArgs{
-				Query: pulumi.String(fmt.Sprintf("{\"ResourceTypeFilters\": [\"AWS::AllSupported\"], \"TagFilters\": [{\"Key\": \"RSB_ENV\", \"Values\": [\"%s\"]}]}", env.Name)),
+				Query: pulumi.Sprintf("{\"ResourceTypeFilters\": [\"AWS::AllSupported\"], \"TagFilters\": [{\"Key\": \"RSB_ENV\", \"Values\": [\"%s\"]}]}", env.Name),
 			},
 			Tags: tags,
 		})
@@ -160,8 +160,8 @@ func infra(env environment) pulumi.RunFunc {
 
 		// Security Group
 		_, err = ec2.NewSecurityGroup(ctx, "sg-"+env.Name, &ec2.SecurityGroupArgs{
-			Name:        pulumi.String(fmt.Sprintf("%s-main", env.Name)),
-			Description: pulumi.String(fmt.Sprintf("Main security group for %s", env.Name)),
+			Name:        pulumi.Sprintf("%s-main", env.Name),
+			Description: pulumi.Sprintf("Main security group for %s", env.Name),
 			VpcId:       vpc.ID(),
 			Egress: ec2.SecurityGroupEgressArray{
 				// Allow outbound traffic to any
