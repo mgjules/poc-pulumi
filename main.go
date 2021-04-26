@@ -37,9 +37,9 @@ func run() error {
 
 	api := router.Group("/api")
 	{
-		api.POST("/environments", createEnvironment())
+		api.POST("/environments", createEnvironment(cfg))
 		api.GET("/environments/:name", getEnvironment())
-		api.PUT("/environments/:name", updateEnvironment())
+		api.PUT("/environments/:name", updateEnvironment(cfg))
 		api.DELETE("/environments/:name", deleteEnvironment())
 	}
 

@@ -17,7 +17,7 @@ type awsCredentials struct {
 	AWSRegion          string `json:"aws_region" binding:"required"`
 }
 
-func createEnvironment() gin.HandlerFunc {
+func createEnvironment(cfg config) gin.HandlerFunc {
 	type request struct {
 		environment
 		awsCredentials
@@ -34,6 +34,8 @@ func createEnvironment() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
 			return
 		}
+
+		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := req.Name
@@ -111,7 +113,7 @@ func getEnvironment() gin.HandlerFunc {
 	}
 }
 
-func updateEnvironment() gin.HandlerFunc {
+func updateEnvironment(cfg config) gin.HandlerFunc {
 	type request struct {
 		environment
 		awsCredentials
@@ -123,6 +125,13 @@ func updateEnvironment() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
 			return
 		}
+
+		if err := req.environment.Validate(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
+			return
+		}
+
+		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
