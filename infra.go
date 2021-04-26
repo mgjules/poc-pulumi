@@ -40,8 +40,6 @@ var (
 
 func infra(env environment) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
-		// TODO: replace with current infra setup (vpc+ec2bastion+ecs+igw+dynamodb+mq)
-
 		// Tags
 		tags := pulumi.ToStringMap(map[string]string{
 			"RSB_ENV": env.Name,
@@ -60,6 +58,8 @@ func infra(env environment) pulumi.RunFunc {
 		if err != nil {
 			return fmt.Errorf("creating resource group: %w", err)
 		}
+
+		// TODO: might need to create a s3 backup bucket (see miscUp)
 
 		// VPC
 		vpc, err := ec2.NewVpc(ctx, "vpc-"+env.Name, &ec2.VpcArgs{
@@ -159,89 +159,70 @@ func infra(env environment) pulumi.RunFunc {
 		}
 
 		// Security Group
-		sg, err := ec2.NewSecurityGroup(ctx, "sg-"+env.Name, &ec2.SecurityGroupArgs{
+		_, err = ec2.NewSecurityGroup(ctx, "sg-"+env.Name, &ec2.SecurityGroupArgs{
 			Name:        pulumi.String(fmt.Sprintf("%s-main", env.Name)),
 			Description: pulumi.String(fmt.Sprintf("Main security group for %s", env.Name)),
 			VpcId:       vpc.ID(),
-			Tags:        tags,
+			Egress: ec2.SecurityGroupEgressArray{
+				// Allow outbound traffic to any
+				ec2.SecurityGroupEgressArgs{
+					Protocol: pulumi.String("all"),
+					FromPort: pulumi.Int(0),
+					ToPort:   pulumi.Int(0),
+					CidrBlocks: pulumi.StringArray{
+						pulumi.String("0.0.0.0/0"),
+					},
+					Ipv6CidrBlocks: pulumi.StringArray{
+						pulumi.String("::/0"),
+					},
+				},
+			},
+			Ingress: ec2.SecurityGroupIngressArray{
+				// Open HTTPS and SSH to public
+				ec2.SecurityGroupIngressArgs{
+					Protocol: pulumi.String("tcp"),
+					FromPort: pulumi.Int(22),
+					ToPort:   pulumi.Int(22),
+					CidrBlocks: pulumi.StringArray{
+						pulumi.String("0.0.0.0/0"),
+					},
+				},
+				ec2.SecurityGroupIngressArgs{
+					Protocol: pulumi.String("tcp"),
+					FromPort: pulumi.Int(443),
+					ToPort:   pulumi.Int(443),
+					CidrBlocks: pulumi.StringArray{
+						pulumi.String("0.0.0.0/0"),
+					},
+				},
+				// Open the wireguard VPN port
+				ec2.SecurityGroupIngressArgs{
+					Protocol: pulumi.String("udp"),
+					FromPort: pulumi.Int(51820),
+					ToPort:   pulumi.Int(51820),
+					CidrBlocks: pulumi.StringArray{
+						pulumi.String("0.0.0.0/0"),
+					},
+				},
+				// Allow connections from internal (Fargate)
+				ec2.SecurityGroupIngressArgs{
+					Protocol: pulumi.String("all"),
+					FromPort: pulumi.Int(0),
+					ToPort:   pulumi.Int(0),
+					CidrBlocks: pulumi.StringArray{
+						pulumi.String("10.0.0.0/8"),
+						pulumi.String("172.16.0.0/12"),
+						pulumi.String("192.168.0.0/16"),
+					},
+				},
+			},
+			Tags: tags,
 		})
 		if err != nil {
 			return fmt.Errorf("creating security group: %w", err)
 		}
 
-		// Security Group Rules
-		{
-			// Open HTTPS and SSH to public
-			for _, port := range []int{22, 443} {
-				name := fmt.Sprintf("sg-rule-%s-tcp-%d", env.Name, port)
-				_, err = ec2.NewSecurityGroupRule(ctx, name, &ec2.SecurityGroupRuleArgs{
-					SecurityGroupId: sg.ID(),
-					Type:            pulumi.String("ingress"),
-					Protocol:        pulumi.String("tcp"),
-					FromPort:        pulumi.Int(port),
-					ToPort:          pulumi.Int(port),
-					CidrBlocks: pulumi.StringArray{
-						pulumi.String("0.0.0.0/0"),
-					},
-				})
-				if err != nil {
-					return fmt.Errorf("creating security group rule [%s]: %w", name, err)
-				}
-			}
-
-			// Open the wireguard VPN port
-			sgRuleWireguardName := "sg-rule-" + env.Name + "-wireguard"
-			_, err = ec2.NewSecurityGroupRule(ctx, sgRuleWireguardName, &ec2.SecurityGroupRuleArgs{
-				SecurityGroupId: sg.ID(),
-				Type:            pulumi.String("ingress"),
-				Protocol:        pulumi.String("udp"),
-				FromPort:        pulumi.Int(51820),
-				ToPort:          pulumi.Int(51820),
-				CidrBlocks: pulumi.StringArray{
-					pulumi.String("0.0.0.0/0"),
-				},
-			})
-			if err != nil {
-				return fmt.Errorf("creating security group rule [%s]: %w", sgRuleWireguardName, err)
-			}
-
-			// Allow connections from internal (Fargate)
-			sgRuleFargateInternalName := "sg-rule-" + env.Name + "-fargate-internal"
-			_, err = ec2.NewSecurityGroupRule(ctx, sgRuleFargateInternalName, &ec2.SecurityGroupRuleArgs{
-				SecurityGroupId: sg.ID(),
-				Type:            pulumi.String("ingress"),
-				Protocol:        pulumi.String("all"),
-				FromPort:        pulumi.Int(0),
-				ToPort:          pulumi.Int(0),
-				CidrBlocks: pulumi.StringArray{
-					pulumi.String("10.0.0.0/8"),
-					pulumi.String("172.16.0.0/12"),
-					pulumi.String("192.168.0.0/16"),
-				},
-			})
-			if err != nil {
-				return fmt.Errorf("creating security group rule [%s]: %w", sgRuleFargateInternalName, err)
-			}
-
-			// Allow outbound
-			sgRuleOutboundName := "sg-rule-" + env.Name + "-outbound"
-			_, err = ec2.NewSecurityGroupRule(ctx, sgRuleOutboundName, &ec2.SecurityGroupRuleArgs{
-				SecurityGroupId: sg.ID(),
-				Type:            pulumi.String("egress"),
-				Protocol:        pulumi.String("all"),
-				FromPort:        pulumi.Int(0),
-				ToPort:          pulumi.Int(0),
-				CidrBlocks: pulumi.StringArray{
-					pulumi.String("0.0.0.0/0"),
-				},
-				Ipv6CidrBlocks: pulumi.StringArray{
-					pulumi.String("::/0"),
-				},
-			})
-			if err != nil {
-				return fmt.Errorf("creating security group rule [%s]: %w", sgRuleOutboundName, err)
-			}
-		}
+		// TODO: implement current infra setup (bastion+ecs+fargate+mq)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
