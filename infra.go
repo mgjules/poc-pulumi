@@ -14,8 +14,6 @@ import (
 )
 
 const (
-	_vpcCIDR = "10.15.96.0/19"
-
 	_subnetGroupPublic       = "public"
 	_subnetGroupPrivate      = "private"
 	_subnetGroupDatabase     = "database"
@@ -73,7 +71,7 @@ func infra(env environment) pulumi.RunFunc {
 
 		// VPC
 		vpc, err := ec2.NewVpc(ctx, "vpc-"+env.Name, &ec2.VpcArgs{
-			CidrBlock:                    pulumi.String(_vpcCIDR),
+			CidrBlock:                    pulumi.String("10.15.96.0/19"),
 			AssignGeneratedIpv6CidrBlock: pulumi.Bool(true),
 			Tags:                         tags,
 		})
