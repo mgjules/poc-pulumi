@@ -11,7 +11,9 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 )
 
-func createEnvironment(cfg config) gin.HandlerFunc {
+const _awsPluginVersion = "v3.2.1"
+
+func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
 		awsCredentials
@@ -35,7 +37,7 @@ func createEnvironment(cfg config) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := req.Name
 
-		s, err := auto.NewStackInlineSource(ctx, envName, _project, infra(req.environment), auto.WorkDir("."))
+		s, err := auto.NewStackInlineSource(ctx, envName, _projectName, infra(req.environment), opts...)
 		if err != nil {
 			// if stack already exists, 409
 			if auto.IsCreateStack409Error(err) {
@@ -43,6 +45,11 @@ func createEnvironment(cfg config) gin.HandlerFunc {
 				return
 			}
 
+			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+			return
+		}
+
+		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
@@ -64,7 +71,7 @@ func createEnvironment(cfg config) gin.HandlerFunc {
 	}
 }
 
-func getEnvironment(cfg config) gin.HandlerFunc {
+func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		awsCredentials
 	}
@@ -81,7 +88,7 @@ func getEnvironment(cfg config) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _project, infra(environment{}), auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -89,6 +96,11 @@ func getEnvironment(cfg config) gin.HandlerFunc {
 				return
 			}
 
+			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+			return
+		}
+
+		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
@@ -110,7 +122,7 @@ func getEnvironment(cfg config) gin.HandlerFunc {
 	}
 }
 
-func updateEnvironment(cfg config) gin.HandlerFunc {
+func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
 		awsCredentials
@@ -134,7 +146,7 @@ func updateEnvironment(cfg config) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _project, infra(req.environment), auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(req.environment), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -142,6 +154,11 @@ func updateEnvironment(cfg config) gin.HandlerFunc {
 				return
 			}
 
+			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+			return
+		}
+
+		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
@@ -168,7 +185,7 @@ func updateEnvironment(cfg config) gin.HandlerFunc {
 	}
 }
 
-func deleteEnvironment(cfg config) gin.HandlerFunc {
+func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		awsCredentials
 	}
@@ -185,7 +202,7 @@ func deleteEnvironment(cfg config) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _project, infra(environment{}), auto.WorkDir("."))
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			if auto.IsSelectStack404Error(err) {
 				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", envName)})
@@ -195,6 +212,12 @@ func deleteEnvironment(cfg config) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
+
+		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+			return
+		}
+
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})

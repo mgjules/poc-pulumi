@@ -1,5 +1,4 @@
 name: bus
 runtime: go
-main: /home/mike/go/src/github.com/MikealGo/poc-pulumi
 backend:
   url: file://.

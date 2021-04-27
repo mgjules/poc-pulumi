@@ -2,7 +2,9 @@ POST http://localhost:13337/api/environments
 Content-Type: application/json
 
 {
-    "name": "mike"
+    "name": "mike",
+    "dns_zone_id": "Z39EZA6EWSOY2X",
+    "domain": "520152236921.ritdu.tech"
 }
 
 ###
@@ -18,7 +20,9 @@ PUT http://localhost:13337/api/environments/mike
 Content-Type: application/json
 
 {
-    "name": "mike"
+    "name": "mike",
+    "dns_zone_id": "Z39EZA6EWSOY2X",
+    "domain": "520152236921.ritdu.tech"
 }
 
 ###
