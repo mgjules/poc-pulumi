@@ -6,6 +6,7 @@ import (
 
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticache"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
 	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
@@ -14,6 +15,11 @@ import (
 
 const (
 	_vpcCIDR = "10.15.96.0/19"
+
+	_subnetGroupPublic       = "public"
+	_subnetGroupPrivate      = "private"
+	_subnetGroupDatabase     = "database"
+	_subnetGroupElasticCache = "elasticcache"
 )
 
 var (
@@ -24,21 +30,21 @@ var (
 		Public bool
 	}{
 		// Public
-		{Group: "public", CIDR: "10.15.111.0/24", AZ: "eu-west-1a", Public: true},
-		{Group: "public", CIDR: "10.15.112.0/24", AZ: "eu-west-1b", Public: true},
-		{Group: "public", CIDR: "10.15.113.0/24", AZ: "eu-west-1c", Public: true},
+		{Group: _subnetGroupPublic, CIDR: "10.15.111.0/24", AZ: "eu-west-1a", Public: true},
+		{Group: _subnetGroupPublic, CIDR: "10.15.112.0/24", AZ: "eu-west-1b", Public: true},
+		{Group: _subnetGroupPublic, CIDR: "10.15.113.0/24", AZ: "eu-west-1c", Public: true},
 		// Private
-		{Group: "private", CIDR: "10.15.96.0/24", AZ: "eu-west-1a", Public: false},
-		{Group: "private", CIDR: "10.15.97.0/24", AZ: "eu-west-1b", Public: false},
-		{Group: "private", CIDR: "10.15.98.0/24", AZ: "eu-west-1c", Public: false},
+		{Group: _subnetGroupPrivate, CIDR: "10.15.96.0/24", AZ: "eu-west-1a", Public: false},
+		{Group: _subnetGroupPrivate, CIDR: "10.15.97.0/24", AZ: "eu-west-1b", Public: false},
+		{Group: _subnetGroupPrivate, CIDR: "10.15.98.0/24", AZ: "eu-west-1c", Public: false},
 		// Database
-		{Group: "database", CIDR: "10.15.101.0/24", AZ: "eu-west-1a", Public: false},
-		{Group: "database", CIDR: "10.15.102.0/24", AZ: "eu-west-1b", Public: false},
-		{Group: "database", CIDR: "10.15.103.0/24", AZ: "eu-west-1c", Public: false},
+		{Group: _subnetGroupDatabase, CIDR: "10.15.101.0/24", AZ: "eu-west-1a", Public: false},
+		{Group: _subnetGroupDatabase, CIDR: "10.15.102.0/24", AZ: "eu-west-1b", Public: false},
+		{Group: _subnetGroupDatabase, CIDR: "10.15.103.0/24", AZ: "eu-west-1c", Public: false},
 		// ElasticCache
-		{Group: "elasticcache", CIDR: "10.15.106.0/24", AZ: "eu-west-1a", Public: false},
-		{Group: "elasticcache", CIDR: "10.15.107.0/24", AZ: "eu-west-1b", Public: false},
-		{Group: "elasticcache", CIDR: "10.15.108.0/24", AZ: "eu-west-1c", Public: false},
+		{Group: _subnetGroupElasticCache, CIDR: "10.15.106.0/24", AZ: "eu-west-1a", Public: false},
+		{Group: _subnetGroupElasticCache, CIDR: "10.15.107.0/24", AZ: "eu-west-1b", Public: false},
+		{Group: _subnetGroupElasticCache, CIDR: "10.15.108.0/24", AZ: "eu-west-1c", Public: false},
 	}
 )
 
@@ -113,7 +119,7 @@ func infra(env environment) pulumi.RunFunc {
 		// NAT Gateway
 		nat, err := ec2.NewNatGateway(ctx, "nat-"+env.Name, &ec2.NatGatewayArgs{
 			AllocationId: eip.ID(),
-			SubnetId:     subnetGroups["public"][0].ID(),
+			SubnetId:     subnetGroups[_subnetGroupPublic][0].ID(),
 			Tags:         tags,
 		})
 		if err != nil {
@@ -140,7 +146,7 @@ func infra(env environment) pulumi.RunFunc {
 				DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
 			}
 
-			if groupName == "public" {
+			if groupName == _subnetGroupPublic {
 				routeArgs.GatewayId = igw.ID()
 			} else {
 				routeArgs.NatGatewayId = nat.ID()
@@ -352,7 +358,7 @@ func infra(env environment) pulumi.RunFunc {
 		bastion, err := ec2.NewInstance(ctx, "ec2-instance-bastion-"+env.Name, &ec2.InstanceArgs{
 			Ami:             pulumi.String(env.BastionAMIID),
 			InstanceType:    ec2.InstanceType_T3_Micro,
-			SubnetId:        subnetGroups["public"][0].ID(),
+			SubnetId:        subnetGroups[_subnetGroupPublic][0].ID(),
 			SourceDestCheck: pulumi.Bool(false),
 			VpcSecurityGroupIds: pulumi.StringArray{
 				sg.ID(),
@@ -410,7 +416,40 @@ func infra(env environment) pulumi.RunFunc {
 			}
 		}
 
-		// TODO: implement current infra setup (mq+cache+ecs+fargate+apigw)
+		// Elastic security group
+		elcSubnetGroup, err := elasticache.NewSubnetGroup(ctx, "elc-subnet-group-"+env.Name, &elasticache.SubnetGroupArgs{
+			Name:        pulumi.String(env.Name),
+			Description: pulumi.String(env.Name),
+			SubnetIds: pulumi.StringArray{
+				subnetGroups[_subnetGroupElasticCache][0].ID(),
+				subnetGroups[_subnetGroupElasticCache][1].ID(),
+				subnetGroups[_subnetGroupElasticCache][2].ID(),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating elastic subnet group: %w", err)
+		}
+
+		// Elastic cluster
+		_, err = elasticache.NewCluster(ctx, "elc-cluster-"+env.Name, &elasticache.ClusterArgs{
+			ClusterId:         pulumi.String(env.Name),
+			NodeType:          pulumi.String("cache.t2.micro"),
+			SubnetGroupName:   elcSubnetGroup.Name,
+			Engine:            pulumi.String("redis"),
+			EngineVersion:     pulumi.String("5.0.6"),
+			NumCacheNodes:     pulumi.Int(1),
+			Port:              pulumi.Int(6379),
+			MaintenanceWindow: pulumi.String("sat:23:00-sun:01:30"),
+			SecurityGroupIds: pulumi.StringArray{
+				sg.ID(),
+			},
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating elastic cluster: %w", err)
+		}
+
+		// TODO: implement current infra setup (mq+ecs+fargate+apigw)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
