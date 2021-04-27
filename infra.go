@@ -173,7 +173,7 @@ func infra(env environment) pulumi.RunFunc {
 			Egress: ec2.SecurityGroupEgressArray{
 				// Allow outbound traffic to any
 				ec2.SecurityGroupEgressArgs{
-					Protocol: pulumi.String("all"),
+					Protocol: ec2.ProtocolTypeAll,
 					FromPort: pulumi.Int(0),
 					ToPort:   pulumi.Int(0),
 					CidrBlocks: pulumi.StringArray{
@@ -187,7 +187,7 @@ func infra(env environment) pulumi.RunFunc {
 			Ingress: ec2.SecurityGroupIngressArray{
 				// Open HTTPS and SSH to public
 				ec2.SecurityGroupIngressArgs{
-					Protocol:    pulumi.String("tcp"),
+					Protocol:    ec2.ProtocolTypeTCP,
 					FromPort:    pulumi.Int(22),
 					ToPort:      pulumi.Int(22),
 					Description: pulumi.String("SSH"),
@@ -196,7 +196,7 @@ func infra(env environment) pulumi.RunFunc {
 					},
 				},
 				ec2.SecurityGroupIngressArgs{
-					Protocol:    pulumi.String("tcp"),
+					Protocol:    ec2.ProtocolTypeTCP,
 					FromPort:    pulumi.Int(443),
 					ToPort:      pulumi.Int(443),
 					Description: pulumi.String("HTTPS"),
@@ -206,7 +206,7 @@ func infra(env environment) pulumi.RunFunc {
 				},
 				// Open the wireguard VPN port
 				ec2.SecurityGroupIngressArgs{
-					Protocol:    pulumi.String("udp"),
+					Protocol:    ec2.ProtocolTypeUDP,
 					FromPort:    pulumi.Int(51820),
 					ToPort:      pulumi.Int(51820),
 					Description: pulumi.String("Wireguard VPN"),
@@ -216,7 +216,7 @@ func infra(env environment) pulumi.RunFunc {
 				},
 				// Open to Ringier VPN
 				ec2.SecurityGroupIngressArgs{
-					Protocol:    pulumi.String("all"),
+					Protocol:    ec2.ProtocolTypeAll,
 					FromPort:    pulumi.Int(0),
 					ToPort:      pulumi.Int(0),
 					Description: pulumi.String("Ringier VPN"),
@@ -226,7 +226,7 @@ func infra(env environment) pulumi.RunFunc {
 				},
 				// Allow connections from internal (Fargate)
 				ec2.SecurityGroupIngressArgs{
-					Protocol:    pulumi.String("all"),
+					Protocol:    ec2.ProtocolTypeAll,
 					FromPort:    pulumi.Int(0),
 					ToPort:      pulumi.Int(0),
 					Description: pulumi.String("Internal Fargate"),
@@ -372,7 +372,7 @@ func infra(env environment) pulumi.RunFunc {
 		// Public A record for bastion instance
 		_, err = route53.NewRecord(ctx, "record-pub-bastion"+env.Name, &route53.RecordArgs{
 			Name: pulumi.Sprintf("bastion.%s.%s", env.Name, env.Domain),
-			Type: pulumi.String("A"),
+			Type: route53.RecordTypeA,
 			Records: pulumi.StringArray{
 				bastion.PublicIp,
 			},
@@ -386,7 +386,7 @@ func infra(env environment) pulumi.RunFunc {
 		// Public A record for bastion instance
 		_, err = route53.NewRecord(ctx, "record-priv-bastion"+env.Name, &route53.RecordArgs{
 			Name: pulumi.Sprintf("srv.%s.%s", env.Name, env.Domain),
-			Type: pulumi.String("A"),
+			Type: route53.RecordTypeA,
 			Records: pulumi.StringArray{
 				bastion.PrivateIp,
 			},
