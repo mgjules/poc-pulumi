@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
+	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -119,6 +121,7 @@ func infra(env environment) pulumi.RunFunc {
 		}
 
 		// Route tables
+		routeTables := make(map[string]*ec2.RouteTable)
 		for groupName, subnets := range subnetGroups {
 			routeTableName := "rt-" + env.Name + "-" + groupName
 			rt, err := ec2.NewRouteTable(ctx, routeTableName, &ec2.RouteTableArgs{
@@ -128,6 +131,8 @@ func infra(env environment) pulumi.RunFunc {
 			if err != nil {
 				return fmt.Errorf("creating route table [%s]: %w", routeTableName, err)
 			}
+
+			routeTables[routeTableName] = rt
 
 			// Default Route
 			routeArgs := &ec2.RouteArgs{
@@ -161,7 +166,7 @@ func infra(env environment) pulumi.RunFunc {
 		}
 
 		// Security Group
-		_, err = ec2.NewSecurityGroup(ctx, "sg-"+env.Name, &ec2.SecurityGroupArgs{
+		sg, err := ec2.NewSecurityGroup(ctx, "sg-"+env.Name, &ec2.SecurityGroupArgs{
 			Name:        pulumi.Sprintf("%s-main", env.Name),
 			Description: pulumi.Sprintf("Main security group for %s", env.Name),
 			VpcId:       vpc.ID(),
@@ -182,35 +187,49 @@ func infra(env environment) pulumi.RunFunc {
 			Ingress: ec2.SecurityGroupIngressArray{
 				// Open HTTPS and SSH to public
 				ec2.SecurityGroupIngressArgs{
-					Protocol: pulumi.String("tcp"),
-					FromPort: pulumi.Int(22),
-					ToPort:   pulumi.Int(22),
+					Protocol:    pulumi.String("tcp"),
+					FromPort:    pulumi.Int(22),
+					ToPort:      pulumi.Int(22),
+					Description: pulumi.String("SSH"),
 					CidrBlocks: pulumi.StringArray{
 						pulumi.String("0.0.0.0/0"),
 					},
 				},
 				ec2.SecurityGroupIngressArgs{
-					Protocol: pulumi.String("tcp"),
-					FromPort: pulumi.Int(443),
-					ToPort:   pulumi.Int(443),
+					Protocol:    pulumi.String("tcp"),
+					FromPort:    pulumi.Int(443),
+					ToPort:      pulumi.Int(443),
+					Description: pulumi.String("HTTPS"),
 					CidrBlocks: pulumi.StringArray{
 						pulumi.String("0.0.0.0/0"),
 					},
 				},
 				// Open the wireguard VPN port
 				ec2.SecurityGroupIngressArgs{
-					Protocol: pulumi.String("udp"),
-					FromPort: pulumi.Int(51820),
-					ToPort:   pulumi.Int(51820),
+					Protocol:    pulumi.String("udp"),
+					FromPort:    pulumi.Int(51820),
+					ToPort:      pulumi.Int(51820),
+					Description: pulumi.String("Wireguard VPN"),
 					CidrBlocks: pulumi.StringArray{
 						pulumi.String("0.0.0.0/0"),
 					},
 				},
+				// Open to Ringier VPN
+				ec2.SecurityGroupIngressArgs{
+					Protocol:    pulumi.String("all"),
+					FromPort:    pulumi.Int(0),
+					ToPort:      pulumi.Int(0),
+					Description: pulumi.String("Ringier VPN"),
+					CidrBlocks: pulumi.StringArray{
+						pulumi.String("108.128.7.94/32"),
+					},
+				},
 				// Allow connections from internal (Fargate)
 				ec2.SecurityGroupIngressArgs{
-					Protocol: pulumi.String("all"),
-					FromPort: pulumi.Int(0),
-					ToPort:   pulumi.Int(0),
+					Protocol:    pulumi.String("all"),
+					FromPort:    pulumi.Int(0),
+					ToPort:      pulumi.Int(0),
+					Description: pulumi.String("Internal Fargate"),
 					CidrBlocks: pulumi.StringArray{
 						pulumi.String("10.0.0.0/8"),
 						pulumi.String("172.16.0.0/12"),
@@ -294,7 +313,112 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating cert validation for wildcard: %w", err)
 		}
 
-		// TODO: implement current infra setup (apigw+bastion+mq+cache+ecs+fargate)
+		dbMasterUserPassword, err := random.NewRandomPassword(ctx, "password-db-master-user-password-"+env.Name, &random.RandomPasswordArgs{
+			Length:  pulumi.Int(32),
+			Lower:   pulumi.Bool(true),
+			Upper:   pulumi.Bool(true),
+			Special: pulumi.Bool(false),
+		})
+		if err != nil {
+			return fmt.Errorf("creating db master user password: %w", err)
+		}
+
+		if env.DBMasterUserPassword == "" {
+			dbMasterUserPassword.Result.ApplyT(func(result string) string {
+				env.DBMasterUserPassword = result
+				return result
+			})
+		}
+
+		rmqMasterUserPassword, err := random.NewRandomPassword(ctx, "password-rmq-master-user-password-"+env.Name, &random.RandomPasswordArgs{
+			Length:  pulumi.Int(32),
+			Lower:   pulumi.Bool(true),
+			Upper:   pulumi.Bool(true),
+			Special: pulumi.Bool(false),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rmq master user password: %w", err)
+		}
+
+		if env.RMQMasterUserPassword == "" {
+			rmqMasterUserPassword.Result.ApplyT(func(result string) string {
+				env.RMQMasterUserPassword = result
+				return result
+			})
+		}
+
+		// Bastion instance
+		// FIXME: perpetual diff for EbsBlockDevices
+		bastion, err := ec2.NewInstance(ctx, "ec2-instance-bastion-"+env.Name, &ec2.InstanceArgs{
+			Ami:                               pulumi.String(env.BastionAMIID),
+			InstanceType:                      pulumi.String("t3.micro"),
+			SubnetId:                          subnetGroups["public"][0].ID(),
+			SourceDestCheck:                   pulumi.Bool(false),
+			InstanceInitiatedShutdownBehavior: pulumi.String("terminate"),
+			EbsBlockDevices: &ec2.InstanceEbsBlockDeviceArray{
+				&ec2.InstanceEbsBlockDeviceArgs{
+					DeviceName: pulumi.String("/dev/sda1"),
+					VolumeSize: pulumi.Int(env.EcsVolumeSize),
+					Encrypted:  pulumi.Bool(false),
+				},
+			},
+			VpcSecurityGroupIds: pulumi.StringArray{
+				sg.ID(),
+			},
+			UserDataBase64: pulumi.String(
+				base64.StdEncoding.EncodeToString(
+					[]byte(fmt.Sprintf("#!/bin/bash\ncd /root\nprintf \"\\nmachine github.com\nlogin roam\npassword %s\" >> .netrc\ngit clone https://github.com/RingierIMU/rsb-deploy.git\necho -n \"%s\" > RMQMasterUserPassword\necho -n \"%s\" > DBMasterUserPassword\necho -n \"%s\" > RSB_Env\necho -n \"%s\" > SLACK_WEBHOOK\ncd ./rsb-deploy/aws/bastion/\n./setup.sh", env.GithubAuthToken, env.RMQMasterUserPassword, env.DBMasterUserPassword, env.Name, env.SlackWebHook)),
+				),
+			),
+			VolumeTags: tags,
+			Tags:       tags,
+		}, pulumi.DependsOn([]pulumi.Resource{dbMasterUserPassword, rmqMasterUserPassword}))
+		if err != nil {
+			return fmt.Errorf("creating ec2 instance for bastion: %w", err)
+		}
+
+		// Public A record for bastion instance
+		_, err = route53.NewRecord(ctx, "record-pub-bastion"+env.Name, &route53.RecordArgs{
+			Name: pulumi.Sprintf("bastion.%s.%s", env.Name, env.Domain),
+			Type: pulumi.String("A"),
+			Records: pulumi.StringArray{
+				bastion.PublicIp,
+			},
+			ZoneId: pulumi.String(env.DNSZoneID),
+			Ttl:    pulumi.Int(300),
+		})
+		if err != nil {
+			return fmt.Errorf("creating public A record for bastion: %w", err)
+		}
+
+		// Public A record for bastion instance
+		_, err = route53.NewRecord(ctx, "record-priv-bastion"+env.Name, &route53.RecordArgs{
+			Name: pulumi.Sprintf("srv.%s.%s", env.Name, env.Domain),
+			Type: pulumi.String("A"),
+			Records: pulumi.StringArray{
+				bastion.PrivateIp,
+			},
+			ZoneId: pulumi.String(env.DNSZoneID),
+			Ttl:    pulumi.Int(300),
+		})
+		if err != nil {
+			return fmt.Errorf("creating private A record for bastion: %w", err)
+		}
+
+		// Routes for bastion instance
+		for routeTableName, routeTable := range routeTables {
+			routeName := fmt.Sprintf("route-bastion-%s-%s", env.Name, routeTableName)
+			_, err = ec2.NewRoute(ctx, routeName, &ec2.RouteArgs{
+				RouteTableId:         routeTable.ID(),
+				InstanceId:           bastion.ID(),
+				DestinationCidrBlock: pulumi.String("192.168.12.0/24"),
+			})
+			if err != nil {
+				return fmt.Errorf("creating bastion route [%s]: %w", routeName, err)
+			}
+		}
+
+		// TODO: implement current infra setup (mq+cache+ecs+fargate+apigw)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil

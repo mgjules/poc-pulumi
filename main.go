@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -25,6 +26,10 @@ func run() error {
 		return fmt.Errorf("read config: %w", err)
 	}
 
+	if err := installPulumiPlugins(context.TODO()); err != nil {
+		return fmt.Errorf("installing pulumi plugins: %w", err)
+	}
+
 	project := auto.Project(workspace.Project{
 		Name:    tokens.PackageName(_projectName),
 		Runtime: workspace.NewProjectRuntimeInfo("go", nil),
@@ -44,6 +49,23 @@ func run() error {
 	}
 
 	if err := router.Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func installPulumiPlugins(ctx context.Context) error {
+	w, err := auto.NewLocalWorkspace(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := w.InstallPlugin(ctx, "aws", "v4.1.0"); err != nil {
+		return err
+	}
+
+	if err := w.InstallPlugin(ctx, "random", "v4.0.0"); err != nil {
 		return err
 	}
 

@@ -6,18 +6,20 @@ import (
 )
 
 type environment struct {
-	Name              string `json:"name" binding:"required"`
-	Domain            string `json:"domain"`
-	DNSZoneID         string `json:"dns_zone_id"`
-	SlackWebHook      string `json:"slack_webhook"`
-	EcsVolumeSize     int    `json:"ecs_volume_size"`
-	EcsCPU            int    `json:"ecs_cpu"`
-	EcsMemory         int    `json:"ecs_memory"`
-	SourceBranch      string `json:"source_branch"`
-	GithubAuthToken   string `json:"github_auth_token"`
-	GithubOrgName     string `json:"github_org_name"`
-	ApiGatewayBaseDef string `json:"api_gateway_base_definition"`
-	BastionAMIID      string `json:"bastion_ami_id"`
+	Name                  string `json:"name" binding:"required"`
+	Domain                string `json:"domain"`
+	DNSZoneID             string `json:"dns_zone_id"`
+	SlackWebHook          string `json:"slack_webhook"`
+	EcsVolumeSize         int    `json:"ecs_volume_size"`
+	EcsCPU                int    `json:"ecs_cpu"`
+	EcsMemory             int    `json:"ecs_memory"`
+	SourceBranch          string `json:"source_branch"`
+	GithubAuthToken       string `json:"github_auth_token"`
+	GithubOrgName         string `json:"github_org_name"`
+	ApiGatewayBaseDef     string `json:"api_gateway_base_definition"`
+	BastionAMIID          string `json:"bastion_ami_id"`
+	DBMasterUserPassword  string `json:"db_master_user_password"`
+	RMQMasterUserPassword string `json:"rmq_master_user_password"`
 }
 
 func (e environment) Validate() error {

@@ -11,8 +11,6 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 )
 
-const _awsPluginVersion = "v3.2.1"
-
 func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
@@ -49,16 +47,11 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
-		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-			return
-		}
-
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
 
-		upRes, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
+		res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
@@ -66,7 +59,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 		c.JSON(http.StatusCreated, gin.H{
 			"name": envName,
-			"vpc":  upRes.Outputs["vpc"].Value,
+			"vpc":  res.Outputs["vpc"].Value,
 		})
 	}
 }
@@ -96,11 +89,6 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-			return
-		}
-
-		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
@@ -158,16 +146,11 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
-		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-			return
-		}
-
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
 
-		upRes, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
+		res, err := s.Up(ctx, optup.Diff(), optup.ProgressStreams(os.Stdout))
 		if err != nil {
 			if auto.IsConcurrentUpdateError(err) {
 				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in progress", envName)})
@@ -180,7 +163,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 		c.JSON(http.StatusOK, gin.H{
 			"name": envName,
-			"vpc":  upRes.Outputs["vpc"].Value,
+			"vpc":  res.Outputs["vpc"].Value,
 		})
 	}
 }
@@ -209,11 +192,6 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-			return
-		}
-
-		if err := s.Workspace().InstallPlugin(ctx, "aws", _awsPluginVersion); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
