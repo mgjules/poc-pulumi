@@ -348,20 +348,12 @@ func infra(env environment) pulumi.RunFunc {
 		}
 
 		// Bastion instance
-		// FIXME: perpetual diff for EbsBlockDevices
+		// NOTE: perpetual diff for EbsBlockDevices so using default with AMI
 		bastion, err := ec2.NewInstance(ctx, "ec2-instance-bastion-"+env.Name, &ec2.InstanceArgs{
-			Ami:                               pulumi.String(env.BastionAMIID),
-			InstanceType:                      pulumi.String("t3.micro"),
-			SubnetId:                          subnetGroups["public"][0].ID(),
-			SourceDestCheck:                   pulumi.Bool(false),
-			InstanceInitiatedShutdownBehavior: pulumi.String("terminate"),
-			EbsBlockDevices: &ec2.InstanceEbsBlockDeviceArray{
-				&ec2.InstanceEbsBlockDeviceArgs{
-					DeviceName: pulumi.String("/dev/sda1"),
-					VolumeSize: pulumi.Int(env.EcsVolumeSize),
-					Encrypted:  pulumi.Bool(false),
-				},
-			},
+			Ami:             pulumi.String(env.BastionAMIID),
+			InstanceType:    ec2.InstanceType_T3_Micro,
+			SubnetId:        subnetGroups["public"][0].ID(),
+			SourceDestCheck: pulumi.Bool(false),
 			VpcSecurityGroupIds: pulumi.StringArray{
 				sg.ID(),
 			},
