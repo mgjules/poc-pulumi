@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -222,7 +224,77 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating security group: %w", err)
 		}
 
-		// TODO: implement current infra setup (ssl+apigw+bastion+mq+cache+ecs+fargate)
+		// Certificate for services
+		certServices, err := acm.NewCertificate(ctx, "cert-services-"+env.Name, &acm.CertificateArgs{
+			DomainName:       pulumi.Sprintf("*.services.%s.%s", env.Name, env.Domain),
+			ValidationMethod: pulumi.String("DNS"),
+			Tags:             tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating cert for services: %w", err)
+		}
+
+		// Validation CNAME record for certificate services
+		recordCertServices, err := route53.NewRecord(ctx, "record-cert-services-validation"+env.Name, &route53.RecordArgs{
+			Name: certServices.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordName().Elem(),
+			Type: certServices.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordType().Elem(),
+			Records: pulumi.StringArray{
+				certServices.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordValue().Elem(),
+			},
+			ZoneId: pulumi.String(env.DNSZoneID),
+			Ttl:    pulumi.Int(300),
+		})
+		if err != nil {
+			return fmt.Errorf("creating record for cert validation for services: %w", err)
+		}
+
+		// Request certificate validation for services
+		_, err = acm.NewCertificateValidation(ctx, "cert-services-validation-"+env.Name, &acm.CertificateValidationArgs{
+			CertificateArn: certServices.Arn,
+			ValidationRecordFqdns: pulumi.StringArray{
+				recordCertServices.Fqdn,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating cert validation for services: %w", err)
+		}
+
+		// Certificate for wildcard
+		certWildcard, err := acm.NewCertificate(ctx, "cert-wildcard-"+env.Name, &acm.CertificateArgs{
+			DomainName:       pulumi.Sprintf("*.%s.%s", env.Name, env.Domain),
+			ValidationMethod: pulumi.String("DNS"),
+			Tags:             tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating cert for wildcard: %w", err)
+		}
+
+		// Validation CNAME record for certificate wildcard
+		recordCertWildcard, err := route53.NewRecord(ctx, "record-cert-wildcard-validation"+env.Name, &route53.RecordArgs{
+			Name: certWildcard.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordName().Elem(),
+			Type: certWildcard.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordType().Elem(),
+			Records: pulumi.StringArray{
+				certWildcard.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordValue().Elem(),
+			},
+			ZoneId: pulumi.String(env.DNSZoneID),
+			Ttl:    pulumi.Int(300),
+		})
+		if err != nil {
+			return fmt.Errorf("creating record for cert validation for wildcard: %w", err)
+		}
+
+		// Request certificate validation for wildcard
+		_, err = acm.NewCertificateValidation(ctx, "cert-wildcard-validation-"+env.Name, &acm.CertificateValidationArgs{
+			CertificateArn: certWildcard.Arn,
+			ValidationRecordFqdns: pulumi.StringArray{
+				recordCertWildcard.Fqdn,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating cert validation for wildcard: %w", err)
+		}
+
+		// TODO: implement current infra setup (apigw+bastion+mq+cache+ecs+fargate)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
