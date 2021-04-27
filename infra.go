@@ -383,7 +383,7 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating public A record for bastion: %w", err)
 		}
 
-		// Public A record for bastion instance
+		// Private A record for bastion instance
 		_, err = route53.NewRecord(ctx, "record-priv-bastion"+env.Name, &route53.RecordArgs{
 			Name: pulumi.Sprintf("srv.%s.%s", env.Name, env.Domain),
 			Type: route53.RecordTypeA,
