@@ -12,6 +12,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/s3"
 	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -561,6 +562,13 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating role task exec ecs cluster: %w", err)
 		}
 
+		_, err = s3.NewBucket(ctx, "bucket-codepipeline-"+env.Name, &s3.BucketArgs{
+			Bucket: pulumi.Sprintf("%s-ci-cd-artifacts", env.Name),
+		})
+		if err != nil {
+			return fmt.Errorf("creating bucket codepipeline: %w", err)
+		}
+
 		// TODO: need feeder nlb vpc link
 		// _, err = apigateway.NewIntegration(ctx, "api-gw-integ-events-"+env.Name, &apigateway.IntegrationArgs{
 		// 	RestApi:               apigw.ID(),
@@ -591,7 +599,7 @@ func infra(env environment) pulumi.RunFunc {
 		// 	return fmt.Errorf("creating rest api gw integration login: %w", err)
 		// }
 
-		// TODO: implement current infra setup (mq+ecs+fargate)
+		// TODO: implement current infra setup (mq+fargate)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
