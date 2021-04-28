@@ -150,7 +150,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
 
-		res, err := s.Up(ctx, optup.Diff(), optup.ProgressStreams(os.Stdout))
+		res, err := s.Up(ctx /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
 		if err != nil {
 			if auto.IsConcurrentUpdateError(err) {
 				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in progress", envName)})
