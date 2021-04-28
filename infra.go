@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"math/rand"
 
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/apigateway"
@@ -605,7 +606,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating elb default target group: %w", err)
 		}
 
-		_, err = elasticloadbalancingv2.NewListener(ctx, "elb-listener-http-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
+		listenerHTTP, err := elasticloadbalancingv2.NewListener(ctx, "elb-listener-http-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
 			LoadBalancerArn: lbMain.Arn,
 			Protocol:        pulumi.String("HTTP"),
 			Port:            pulumi.Int(80),
@@ -620,7 +621,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating elb http listener: %w", err)
 		}
 
-		_, err = elasticloadbalancingv2.NewListener(ctx, "elb-listener-https-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
+		listenerHTTPS, err := elasticloadbalancingv2.NewListener(ctx, "elb-listener-https-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
 			LoadBalancerArn: lbMain.Arn,
 			Protocol:        pulumi.String("HTTPS"),
 			Port:            pulumi.Int(443),
@@ -652,6 +653,71 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			})
 			if err != nil {
 				return fmt.Errorf("creating branch [%s]: %w", rsbService, err)
+			}
+
+			_, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbService, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
+			if err != nil {
+				return fmt.Errorf("fetch base task def [%s]: %w", rsbService, err)
+			}
+
+			tg, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("tg-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
+				Name:       pulumi.Sprintf(shortEnvName(env.Name, rsbService)),
+				TargetType: pulumi.String("ip"),
+				Protocol:   pulumi.String("HTTP"),
+				Port:       pulumi.Int(80),
+				VpcId:      vpc.ID(),
+				Tags:       tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating elb target group [%s]: %w", rsbService, err)
+			}
+
+			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-http-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
+				ListenerArn: listenerHTTP.Arn,
+				Actions: elasticloadbalancingv2.ListenerRuleActionArray{
+					elasticloadbalancingv2.ListenerRuleActionArgs{
+						Type:           pulumi.String("forward"),
+						TargetGroupArn: tg.Arn,
+						Order:          pulumi.Int(rand.Intn(999)),
+					},
+				},
+				Conditions: elasticloadbalancingv2.ListenerRuleConditionArray{
+					elasticloadbalancingv2.ListenerRuleConditionArgs{
+						HostHeader: elasticloadbalancingv2.ListenerRuleConditionHostHeaderArgs{
+							Values: pulumi.StringArray{
+								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService), env.Name, env.Domain),
+							},
+						},
+					},
+				},
+				Priority: pulumi.Int(rand.Intn(4095)),
+			})
+			if err != nil {
+				return fmt.Errorf("creating elb http listener rule [%s]: %w", rsbService, err)
+			}
+
+			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-https-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
+				ListenerArn: listenerHTTPS.Arn,
+				Actions: elasticloadbalancingv2.ListenerRuleActionArray{
+					elasticloadbalancingv2.ListenerRuleActionArgs{
+						Type:           pulumi.String("forward"),
+						TargetGroupArn: tg.Arn,
+						Order:          pulumi.Int(rand.Intn(999)),
+					},
+				},
+				Conditions: elasticloadbalancingv2.ListenerRuleConditionArray{
+					elasticloadbalancingv2.ListenerRuleConditionArgs{
+						HostHeader: elasticloadbalancingv2.ListenerRuleConditionHostHeaderArgs{
+							Values: pulumi.StringArray{
+								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService), env.Name, env.Domain),
+							},
+						},
+					},
+				},
+				Priority: pulumi.Int(rand.Intn(4095)),
+			})
+			if err != nil {
+				return fmt.Errorf("creating elb https listener rule [%s]: %w", rsbService, err)
 			}
 		}
 
