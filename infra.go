@@ -7,7 +7,9 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ecs"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticache"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
 	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
@@ -534,6 +536,29 @@ func infra(env environment) pulumi.RunFunc {
 		})
 		if err != nil {
 			return fmt.Errorf("creating rest api gw base path mapping: %w", err)
+		}
+
+		// ECS Cluster
+		_, err = ecs.NewCluster(ctx, "ecs-cluster-"+env.Name, &ecs.ClusterArgs{
+			Name: pulumi.String(env.Name),
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating ecs cluster: %w", err)
+		}
+
+		_, err = iam.NewRole(ctx, "role-ecs-cluster-"+env.Name, &iam.RoleArgs{
+			Name:             pulumi.Sprintf("%s_ecsTaskExecutionRole", env.Name),
+			Description:      pulumi.String(env.Name),
+			Path:             pulumi.String("/service-role/"),
+			AssumeRolePolicy: pulumi.String(`{"Version":"2008-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}`),
+			ManagedPolicyArns: pulumi.StringArray{
+				pulumi.String("arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"),
+			},
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating role task exec ecs cluster: %w", err)
 		}
 
 		// TODO: need feeder nlb vpc link
