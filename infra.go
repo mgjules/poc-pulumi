@@ -15,6 +15,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/s3"
+	"github.com/pulumi/pulumi-github/sdk/v4/go/github"
 	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -644,6 +645,14 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating repo [%s]: %w", rsbService, err)
 			}
 
+			_, err = github.NewBranch(ctx, fmt.Sprintf("branch-%s-%s", rsbService, env.Name), &github.BranchArgs{
+				SourceBranch: pulumi.String(env.SourceBranch),
+				Branch:       pulumi.String(env.Name),
+				Repository:   pulumi.Sprintf("%s", rsbService),
+			})
+			if err != nil {
+				return fmt.Errorf("creating branch [%s]: %w", rsbService, err)
+			}
 		}
 
 		// TODO: need feeder nlb vpc link
