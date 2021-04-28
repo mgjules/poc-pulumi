@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticache"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
@@ -447,7 +448,124 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating elastic cluster: %w", err)
 		}
 
-		// TODO: implement current infra setup (mq+ecs+fargate+apigw)
+		apigw, err := apigateway.NewRestApi(ctx, "api-gw-"+env.Name, &apigateway.RestApiArgs{
+			Name: pulumi.String(env.Name),
+			EndpointConfiguration: apigateway.RestApiEndpointConfigurationArgs{
+				Types: pulumi.String("REGIONAL"),
+			},
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw: %w", err)
+		}
+
+		resEvents, err := apigateway.NewResource(ctx, "api-gw-res-events-"+env.Name, &apigateway.ResourceArgs{
+			RestApi:  apigw.ID(),
+			ParentId: apigw.RootResourceId,
+			PathPart: pulumi.String("events"),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw resource events: %w", err)
+		}
+
+		_, err = apigateway.NewMethod(ctx, "api-gw-method-events-"+env.Name, &apigateway.MethodArgs{
+			RestApi:        apigw.ID(),
+			ResourceId:     resEvents.ID(),
+			ApiKeyRequired: pulumi.Bool(true),
+			HttpMethod:     pulumi.String("POST"),
+			Authorization:  pulumi.String("NONE"),
+			RequestParameters: pulumi.BoolMap{
+				"method.request.header.x-api-key": pulumi.Bool(false),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw method events: %w", err)
+		}
+
+		resLogin, err := apigateway.NewResource(ctx, "api-gw-res-login-"+env.Name, &apigateway.ResourceArgs{
+			RestApi:  apigw.ID(),
+			ParentId: apigw.RootResourceId,
+			PathPart: pulumi.String("login"),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw resource login: %w", err)
+		}
+
+		_, err = apigateway.NewMethod(ctx, "api-gw-method-login-"+env.Name, &apigateway.MethodArgs{
+			RestApi:        apigw.ID(),
+			ResourceId:     resLogin.ID(),
+			ApiKeyRequired: pulumi.Bool(false),
+			HttpMethod:     pulumi.String("POST"),
+			Authorization:  pulumi.String("NONE"),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw method login: %w", err)
+		}
+
+		domainAPIGw, err := apigateway.NewDomainName(ctx, "api-gw-domain-"+env.Name, &apigateway.DomainNameArgs{
+			DomainName: pulumi.Sprintf("bus.%s.%s", env.Name, env.Domain),
+			EndpointConfiguration: apigateway.DomainNameEndpointConfigurationArgs{
+				Types: pulumi.String("REGIONAL"),
+			},
+			RegionalCertificateArn: certWildcard.Arn,
+			Tags:                   tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw domain: %w", err)
+		}
+
+		_, err = route53.NewRecord(ctx, "record-api-gw-"+env.Name, &route53.RecordArgs{
+			Name: domainAPIGw.DomainName,
+			Type: route53.RecordTypeCNAME,
+			Records: pulumi.StringArray{
+				domainAPIGw.RegionalDomainName,
+			},
+			ZoneId: pulumi.String(env.DNSZoneID),
+			Ttl:    pulumi.Int(300),
+		})
+		if err != nil {
+			return fmt.Errorf("creating record for cert validation for wildcard: %w", err)
+		}
+
+		_, err = apigateway.NewBasePathMapping(ctx, "api-gw-path-"+env.Name, &apigateway.BasePathMappingArgs{
+			DomainName: domainAPIGw.DomainName,
+			RestApi:    apigw.ID(),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw base path mapping: %w", err)
+		}
+
+		// TODO: need feeder nlb vpc link
+		// _, err = apigateway.NewIntegration(ctx, "api-gw-integ-events-"+env.Name, &apigateway.IntegrationArgs{
+		// 	RestApi:               apigw.ID(),
+		// 	ResourceId:            resEvents.ID(),
+		// 	HttpMethod:            methodEvents.HttpMethod,
+		// 	IntegrationHttpMethod: methodEvents.HttpMethod,
+		// 	Type:                  pulumi.String("HTTP"),
+		// 	PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
+		// 	ConnectionType:        pulumi.String("VPC_LINK"),
+		// 	Uri:                   pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.Domain),
+		// })
+		// if err != nil {
+		// 	return fmt.Errorf("creating rest api gw integration events: %w", err)
+		// }
+
+		// TODO: need user nlb vpc link
+		// _, err = apigateway.NewIntegration(ctx, "api-gw-integ-login-"+env.Name, &apigateway.IntegrationArgs{
+		// 	RestApi:               apigw.ID(),
+		// 	ResourceId:            resLogin.ID(),
+		// 	HttpMethod:            methodLogin.HttpMethod,
+		// 	IntegrationHttpMethod: methodLogin.HttpMethod,
+		// 	Type:                  pulumi.String("HTTP"),
+		// 	PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
+		// 	ConnectionType:        pulumi.String("VPC_LINK"),
+		// 	Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.Domain),
+		// })
+		// if err != nil {
+		// 	return fmt.Errorf("creating rest api gw integration login: %w", err)
+		// }
+
+		// TODO: implement current infra setup (mq+ecs+fargate)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
