@@ -571,6 +571,7 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating bucket codepipeline: %w", err)
 		}
 
+		// Main load balancer
 		lbMain, err := elasticloadbalancingv2.NewLoadBalancer(ctx, "elb-main-"+env.Name, &elasticloadbalancingv2.LoadBalancerArgs{
 			Name:     pulumi.Sprintf("%s-services", env.Name),
 			Internal: pulumi.Bool(true),
