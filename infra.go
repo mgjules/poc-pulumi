@@ -9,6 +9,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ecs"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticache"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticloadbalancingv2"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
@@ -564,9 +565,70 @@ func infra(env environment) pulumi.RunFunc {
 
 		_, err = s3.NewBucket(ctx, "bucket-codepipeline-"+env.Name, &s3.BucketArgs{
 			Bucket: pulumi.Sprintf("%s-ci-cd-artifacts", env.Name),
+			Tags:   tags,
 		})
 		if err != nil {
 			return fmt.Errorf("creating bucket codepipeline: %w", err)
+		}
+
+		lbMain, err := elasticloadbalancingv2.NewLoadBalancer(ctx, "elb-main-"+env.Name, &elasticloadbalancingv2.LoadBalancerArgs{
+			Name:     pulumi.Sprintf("%s-services", env.Name),
+			Internal: pulumi.Bool(true),
+			SecurityGroups: pulumi.StringArray{
+				sg.ID(),
+			},
+			Subnets: pulumi.StringArray{
+				subnetGroups[_subnetGroupPrivate][0].ID(),
+				subnetGroups[_subnetGroupPrivate][1].ID(),
+				subnetGroups[_subnetGroupPrivate][2].ID(),
+			},
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating main load balancer: %w", err)
+		}
+
+		tgDefault, err := elasticloadbalancingv2.NewTargetGroup(ctx, "elb-target-group-default-"+env.Name, &elasticloadbalancingv2.TargetGroupArgs{
+			Name:       pulumi.Sprintf("%s-default", env.Name),
+			TargetType: pulumi.String("ip"),
+			Protocol:   pulumi.String("HTTP"),
+			Port:       pulumi.Int(80),
+			VpcId:      vpc.ID(),
+			Tags:       tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating elb default target group: %w", err)
+		}
+
+		_, err = elasticloadbalancingv2.NewListener(ctx, "elb-listener-http-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
+			LoadBalancerArn: lbMain.Arn,
+			Protocol:        pulumi.String("HTTP"),
+			Port:            pulumi.Int(80),
+			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArray{
+				elasticloadbalancingv2.ListenerDefaultActionArgs{
+					Type:           pulumi.String("forward"),
+					TargetGroupArn: tgDefault.Arn,
+				},
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating elb http listener: %w", err)
+		}
+
+		_, err = elasticloadbalancingv2.NewListener(ctx, "elb-listener-https-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
+			LoadBalancerArn: lbMain.Arn,
+			Protocol:        pulumi.String("HTTPS"),
+			Port:            pulumi.Int(443),
+			CertificateArn:  certWildcard.Arn,
+			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArray{
+				elasticloadbalancingv2.ListenerDefaultActionArgs{
+					Type:           pulumi.String("forward"),
+					TargetGroupArn: tgDefault.Arn,
+				},
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating elb https listener: %w", err)
 		}
 
 		// TODO: need feeder nlb vpc link
