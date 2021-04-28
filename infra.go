@@ -429,7 +429,7 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating elastic subnet group: %w", err)
 		}
 
-		// Elastic cluster
+		// Elastic cache cluster
 		_, err = elasticache.NewCluster(ctx, "elc-cluster-"+env.Name, &elasticache.ClusterArgs{
 			ClusterId:         pulumi.String(env.Name),
 			NodeType:          pulumi.String("cache.t2.micro"),
@@ -448,6 +448,7 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating elastic cluster: %w", err)
 		}
 
+		// API GW
 		apigw, err := apigateway.NewRestApi(ctx, "api-gw-"+env.Name, &apigateway.RestApiArgs{
 			Name: pulumi.String(env.Name),
 			EndpointConfiguration: apigateway.RestApiEndpointConfigurationArgs{
@@ -475,7 +476,7 @@ func infra(env environment) pulumi.RunFunc {
 			HttpMethod:     pulumi.String("POST"),
 			Authorization:  pulumi.String("NONE"),
 			RequestParameters: pulumi.BoolMap{
-				"method.request.header.x-api-key": pulumi.Bool(false),
+				"method.request.header.x-api-key": pulumi.Bool(true),
 			},
 		})
 		if err != nil {
