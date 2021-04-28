@@ -14,7 +14,7 @@ import (
 func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
-		awsCredentials
+		credentials
 	}
 
 	return func(c *gin.Context) {
@@ -29,13 +29,13 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
-		req.awsCredentials.SetDefaults(cfg)
+		req.credentials.SetDefaults(cfg)
 		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := req.Name
 
-		s, err := auto.NewStackInlineSource(ctx, envName, _projectName, infra(req.environment), opts...)
+		s, err := auto.NewStackInlineSource(ctx, envName, _projectName, infra(req.environment, req.credentials), opts...)
 		if err != nil {
 			// if stack already exists, 409
 			if auto.IsCreateStack409Error(err) {
@@ -50,6 +50,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
 		if err != nil {
@@ -66,7 +67,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
-		awsCredentials
+		credentials
 	}
 
 	return func(c *gin.Context) {
@@ -76,12 +77,12 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 			return
 		}
 
-		req.awsCredentials.SetDefaults(cfg)
+		req.credentials.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -96,6 +97,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
@@ -113,7 +115,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
-		awsCredentials
+		credentials
 	}
 
 	return func(c *gin.Context) {
@@ -128,13 +130,13 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
-		req.awsCredentials.SetDefaults(cfg)
+		req.credentials.SetDefaults(cfg)
 		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(req.environment), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(req.environment, req.credentials), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -149,6 +151,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		res, err := s.Up(ctx /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
 		if err != nil {
@@ -170,7 +173,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
-		awsCredentials
+		credentials
 	}
 
 	return func(c *gin.Context) {
@@ -180,12 +183,12 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
-		req.awsCredentials.SetDefaults(cfg)
+		req.credentials.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
 		if err != nil {
 			if auto.IsSelectStack404Error(err) {
 				c.JSON(http.StatusNotFound, gin.H{"msg": fmt.Sprintf("environment %q not found", envName)})
@@ -199,6 +202,7 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		if _, err = s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})

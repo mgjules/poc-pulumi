@@ -7,6 +7,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ecr"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ecs"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticache"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticloadbalancingv2"
@@ -49,9 +50,11 @@ var (
 		{Group: _subnetGroupElasticCache, CIDR: "10.15.107.0/24", AZ: "eu-west-1b", Public: false},
 		{Group: _subnetGroupElasticCache, CIDR: "10.15.108.0/24", AZ: "eu-west-1c", Public: false},
 	}
+
+	_apiGWServices = map[string]bool{"rsb-service-users": true, "rsb-service-feeder": true}
 )
 
-func infra(env environment) pulumi.RunFunc {
+func infra(env environment, cred credentials) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
 		// Tags
 		tags := pulumi.ToStringMap(map[string]string{
@@ -332,9 +335,9 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating db master user password: %w", err)
 		}
 
-		if env.DBMasterUserPassword == "" {
+		if cred.DBMasterUserPassword == "" {
 			dbMasterUserPassword.Result.ApplyT(func(result string) string {
-				env.DBMasterUserPassword = result
+				cred.DBMasterUserPassword = result
 				return result
 			})
 		}
@@ -349,9 +352,9 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("creating rmq master user password: %w", err)
 		}
 
-		if env.RMQMasterUserPassword == "" {
+		if cred.RMQMasterUserPassword == "" {
 			rmqMasterUserPassword.Result.ApplyT(func(result string) string {
-				env.RMQMasterUserPassword = result
+				cred.RMQMasterUserPassword = result
 				return result
 			})
 		}
@@ -368,7 +371,7 @@ func infra(env environment) pulumi.RunFunc {
 			},
 			UserDataBase64: pulumi.String(
 				base64.StdEncoding.EncodeToString(
-					[]byte(fmt.Sprintf("#!/bin/bash\ncd /root\nprintf \"\\nmachine github.com\nlogin roam\npassword %s\" >> .netrc\ngit clone https://github.com/RingierIMU/rsb-deploy.git\necho -n \"%s\" > RMQMasterUserPassword\necho -n \"%s\" > DBMasterUserPassword\necho -n \"%s\" > RSB_Env\necho -n \"%s\" > SLACK_WEBHOOK\ncd ./rsb-deploy/aws/bastion/\n./setup.sh", env.GithubAuthToken, env.RMQMasterUserPassword, env.DBMasterUserPassword, env.Name, env.SlackWebHook)),
+					[]byte(fmt.Sprintf("#!/bin/bash\ncd /root\nprintf \"\\nmachine github.com\nlogin roam\npassword %s\" >> .netrc\ngit clone https://github.com/RingierIMU/rsb-deploy.git\necho -n \"%s\" > RMQMasterUserPassword\necho -n \"%s\" > DBMasterUserPassword\necho -n \"%s\" > RSB_Env\necho -n \"%s\" > SLACK_WEBHOOK\ncd ./rsb-deploy/aws/bastion/\n./setup.sh", cred.GithubAuthToken, cred.RMQMasterUserPassword, cred.DBMasterUserPassword, env.Name, env.SlackWebHook)),
 				),
 			),
 			VolumeTags: tags,
@@ -630,6 +633,17 @@ func infra(env environment) pulumi.RunFunc {
 		})
 		if err != nil {
 			return fmt.Errorf("creating elb https listener: %w", err)
+		}
+
+		for _, rsbService := range env.RsbServices {
+			_, err = ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService, env.Name), &ecr.RepositoryArgs{
+				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService),
+				Tags: tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating repo [%s]: %w", rsbService, err)
+			}
+
 		}
 
 		// TODO: need feeder nlb vpc link

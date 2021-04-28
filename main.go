@@ -65,6 +65,10 @@ func installPulumiPlugins(ctx context.Context) error {
 		return err
 	}
 
+	if err := w.InstallPlugin(ctx, "github", "v4.0.0"); err != nil {
+		return err
+	}
+
 	if err := w.InstallPlugin(ctx, "random", "v4.0.0"); err != nil {
 		return err
 	}
