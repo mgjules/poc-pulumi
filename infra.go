@@ -869,7 +869,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 				mappings := map[string]string{
 					"REPLACEME_RSBServicesCORSOriginURLs":       fmt.Sprintf("%s,https://admin-ui.services.%s.%s", env.ServicesCORSOriginURLs, env.Name, env.Domain),
-					"REPLACEME_BASTION_HOST":                    fmt.Sprintf("bastion.%s.%s", env.Name, env.Domain),
+					"REPLACEME_BASTION_HOST":                    fmt.Sprintf("srv.%s.%s", env.Name, env.Domain),
 					"REPLACEME_AWS_API_GW_ID":                   apigwID,
 					"REPLACEME_RSB_API_BASE_URL":                fmt.Sprintf("https://%s.execute-api.eu-west-1.amazonaws.com/v1", apigwID),
 					"REPLACEME_SERVICE_REGISTRY_BASE_URL":       fmt.Sprintf("https://servicerepository.services.%s.%s", env.Name, env.Domain),
@@ -879,10 +879,10 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					// "REPLACEME_E2EMON_BASE_URL":                  e2eMonBaseUrl(),
 					// "REPLACEME_DB_HOST":                          env.DBHostname,
 					// "REPLACEME_DBHostname":                       env.DBHostname,
-					// "REPLACEME_RMQMasterUsername":                env.RMQMasterUsername,
+					"REPLACEME_RMQMasterUsername":     "admin",
 					"REPLACEME_RMQMasterUserPassword": rmqMasterUserPassword,
 					// "REPLACEME_RMQVHost":                         env.RMQVHost,
-					// "REPLACEME_RMQServer":                        rmqServer(),
+					"REPLACEME_RMQServer": fmt.Sprintf("srv.%s.%s", env.Name, env.Domain),
 					// "REPLACEME_DBMasterUsername":                 env.DBMasterUsername,
 					"REPLACEME_DBMasterUserPassword": dbMasterUserPassword,
 					"REPLACEME_AwsAccessKeyID":       cred.AWSAccessKeyID,
@@ -995,7 +995,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rest api gw stage: %w", err)
 		}
 
-		// TODO: implement current infra setup (mq+fargate)
+		// TODO: implement current infra setup (codepipeline)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
