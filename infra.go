@@ -739,6 +739,19 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating elb https listener rule [%s]: %w", rsbService, err)
 			}
 
+			_, err = route53.NewRecord(ctx, fmt.Sprintf("record-https-%s-%s", rsbService, env.Name), &route53.RecordArgs{
+				Name: pulumi.Sprintf("%s.services.%s.%s.", shortName(rsbService), env.Name, env.Domain),
+				Type: route53.RecordTypeCNAME,
+				Records: pulumi.StringArray{
+					lbMain.DnsName,
+				},
+				ZoneId: pulumi.String(env.DNSZoneID),
+				Ttl:    pulumi.Int(300),
+			})
+			if err != nil {
+				return fmt.Errorf("creating record [%s]: %w", rsbService, err)
+			}
+
 			if _apiGWServices[rsbService] {
 				nlb, err := elasticloadbalancingv2.NewLoadBalancer(ctx, fmt.Sprintf("lb-network-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.LoadBalancerArgs{
 					Name:             pulumi.String(shortEnvName(env.Name, rsbService)),
