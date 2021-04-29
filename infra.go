@@ -317,7 +317,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Request certificate validation for wildcard
-		_, err = acm.NewCertificateValidation(ctx, "cert-wildcard-validation-"+env.Name, &acm.CertificateValidationArgs{
+		certValidationWildcard, err := acm.NewCertificateValidation(ctx, "cert-wildcard-validation-"+env.Name, &acm.CertificateValidationArgs{
 			CertificateArn: certWildcard.Arn,
 			ValidationRecordFqdns: pulumi.StringArray{
 				recordCertWildcard.Fqdn,
@@ -517,7 +517,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			EndpointConfiguration: apigateway.DomainNameEndpointConfigurationArgs{
 				Types: pulumi.String("REGIONAL"),
 			},
-			RegionalCertificateArn: certWildcard.Arn,
+			RegionalCertificateArn: certValidationWildcard.CertificateArn,
 			Tags:                   tags,
 		})
 		if err != nil {
@@ -625,7 +625,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			LoadBalancerArn: lbMain.Arn,
 			Protocol:        pulumi.String("HTTPS"),
 			Port:            pulumi.Int(443),
-			CertificateArn:  certWildcard.Arn,
+			CertificateArn:  certValidationWildcard.CertificateArn,
 			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArray{
 				elasticloadbalancingv2.ListenerDefaultActionArgs{
 					Type:           pulumi.String("forward"),
@@ -646,7 +646,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating repo [%s]: %w", rsbService, err)
 			}
 
-			_, err = github.NewBranch(ctx, fmt.Sprintf("branch-%s-%s", rsbService, env.Name), &github.BranchArgs{
+			branch, err := github.NewBranch(ctx, fmt.Sprintf("branch-%s-%s", rsbService, env.Name), &github.BranchArgs{
 				SourceBranch: pulumi.String(env.SourceBranch),
 				Branch:       pulumi.String(env.Name),
 				Repository:   pulumi.Sprintf("%s", rsbService),
@@ -655,10 +655,14 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating branch [%s]: %w", rsbService, err)
 			}
 
-			_, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbService, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
-			if err != nil {
-				return fmt.Errorf("fetch base task def [%s]: %w", rsbService, err)
-			}
+			_ = branch.Branch.ApplyT(func(name string) (string, error) {
+				baseTaskDef, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbService, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
+				if err != nil {
+					return "", fmt.Errorf("fetch base task def [%s]: %w", rsbService, err)
+				}
+
+				return baseTaskDef, nil
+			}).(pulumi.StringOutput)
 
 			tg, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("tg-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
 				Name:       pulumi.Sprintf(shortEnvName(env.Name, rsbService)),
@@ -719,6 +723,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			if err != nil {
 				return fmt.Errorf("creating elb https listener rule [%s]: %w", rsbService, err)
 			}
+
 		}
 
 		// TODO: need feeder nlb vpc link
