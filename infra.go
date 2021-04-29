@@ -985,6 +985,16 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rest api gw integration login: %w", err)
 		}
 
+		_, err = apigateway.NewDeployment(ctx, "api-gw-deployment-"+env.Name, &apigateway.DeploymentArgs{
+			RestApi:          apigw.ID(),
+			StageName:        pulumi.String("v1"),
+			StageDescription: pulumi.String("v1"),
+			Description:      pulumi.String("Init"),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw stage: %w", err)
+		}
+
 		// TODO: implement current infra setup (mq+fargate)
 
 		ctx.Export("vpc", vpc.Arn)
