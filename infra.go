@@ -549,7 +549,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// ECS Cluster
-		_, err = ecs.NewCluster(ctx, "ecs-cluster-"+env.Name, &ecs.ClusterArgs{
+		cluster, err := ecs.NewCluster(ctx, "ecs-cluster-"+env.Name, &ecs.ClusterArgs{
 			Name: pulumi.String(env.Name),
 			Tags: tags,
 		})
@@ -671,6 +671,14 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating elb target group [%s]: %w", rsbService, err)
 			}
 
+			serviceLoadBalancers := ecs.ServiceLoadBalancerArray{
+				ecs.ServiceLoadBalancerArgs{
+					TargetGroupArn: tg.Arn,
+					ContainerName:  pulumi.String(rsbService),
+					ContainerPort:  pulumi.Int(80),
+				},
+			}
+
 			randomOrder, err := random.NewRandomInteger(ctx, fmt.Sprintf("random-order-%s-%s", rsbService, env.Name), &random.RandomIntegerArgs{
 				Min: pulumi.Int(1),
 				Max: pulumi.Int(999),
@@ -775,6 +783,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				if err != nil {
 					return fmt.Errorf("creating nlb target group [%s]: %w", rsbService, err)
 				}
+
+				serviceLoadBalancers = append(serviceLoadBalancers, ecs.ServiceLoadBalancerArgs{
+					TargetGroupArn: tgNLB.Arn,
+					ContainerName:  pulumi.String(rsbService),
+					ContainerPort:  pulumi.Int(80),
+				})
 
 				_, err = elasticloadbalancingv2.NewListener(ctx, fmt.Sprintf("nlb-listener-http-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.ListenerArgs{
 					LoadBalancerArn: nlb.Arn,
@@ -935,7 +949,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return string(jsonB), nil
 			}).(pulumi.StringOutput)
 
-			_, err = ecs.NewTaskDefinition(ctx, fmt.Sprintf("task-def-%s-%s", rsbService, env.Name), &ecs.TaskDefinitionArgs{
+			taskDef, err := ecs.NewTaskDefinition(ctx, fmt.Sprintf("task-def-%s-%s", rsbService, env.Name), &ecs.TaskDefinitionArgs{
 				ContainerDefinitions: containerDefinitions,
 				Family:               pulumi.Sprintf("%s-%s", env.Name, rsbService),
 				ExecutionRoleArn:     roleExecution.Arn,
@@ -949,6 +963,30 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			})
 			if err != nil {
 				return fmt.Errorf("creating task definition [%s]: %w", rsbService, err)
+			}
+
+			_, err = ecs.NewService(ctx, fmt.Sprintf("ecs-service-%s-%s", rsbService, env.Name), &ecs.ServiceArgs{
+				Cluster:        cluster.ID(),
+				Name:           pulumi.String(rsbService),
+				LaunchType:     pulumi.String("FARGATE"),
+				TaskDefinition: taskDef.Arn,
+				DesiredCount:   pulumi.Int(1),
+				LoadBalancers:  serviceLoadBalancers,
+				NetworkConfiguration: ecs.ServiceNetworkConfigurationArgs{
+					Subnets: pulumi.StringArray{
+						subnetGroups[_subnetGroupDatabase][0].ID(),
+						subnetGroups[_subnetGroupDatabase][1].ID(),
+						subnetGroups[_subnetGroupDatabase][2].ID(),
+					},
+					SecurityGroups: pulumi.StringArray{
+						sg.ID(),
+					},
+					AssignPublicIp: pulumi.Bool(false),
+				},
+				Tags: tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating ecs service [%s]: %w", rsbService, err)
 			}
 		}
 
