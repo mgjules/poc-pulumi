@@ -990,7 +990,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			StageName:        pulumi.String("v1"),
 			StageDescription: pulumi.String("v1"),
 			Description:      pulumi.String("Init"),
-		})
+		}, pulumi.DependsOn([]pulumi.Resource{vpcLinks["rsb-service-feeder"], vpcLinks["rsb-service-users"]}))
 		if err != nil {
 			return fmt.Errorf("creating rest api gw stage: %w", err)
 		}
