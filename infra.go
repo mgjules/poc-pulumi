@@ -990,7 +990,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			}
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "api-gw-integ-events-"+env.Name, &apigateway.IntegrationArgs{
+		integEvents, err := apigateway.NewIntegration(ctx, "api-gw-integ-events-"+env.Name, &apigateway.IntegrationArgs{
 			RestApi:               apigw.ID(),
 			ResourceId:            resEvents.ID(),
 			HttpMethod:            methodEvents.HttpMethod,
@@ -1008,7 +1008,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rest api gw integration events: %w", err)
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "api-gw-integ-login-"+env.Name, &apigateway.IntegrationArgs{
+		integLogin, err := apigateway.NewIntegration(ctx, "api-gw-integ-login-"+env.Name, &apigateway.IntegrationArgs{
 			RestApi:               apigw.ID(),
 			ResourceId:            resLogin.ID(),
 			HttpMethod:            methodLogin.HttpMethod,
@@ -1028,7 +1028,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			StageName:        pulumi.String("v1"),
 			StageDescription: pulumi.String("v1"),
 			Description:      pulumi.String("Init"),
-		}, pulumi.DependsOn([]pulumi.Resource{vpcLinks["rsb-service-feeder"], vpcLinks["rsb-service-users"]}))
+		}, pulumi.DependsOn([]pulumi.Resource{integEvents, integLogin}))
 		if err != nil {
 			return fmt.Errorf("creating rest api gw stage: %w", err)
 		}
