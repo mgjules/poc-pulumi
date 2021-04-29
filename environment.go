@@ -6,16 +6,18 @@ import (
 )
 
 type environment struct {
-	Name          string   `json:"name" binding:"required"`
-	Domain        string   `json:"domain"`
-	DNSZoneID     string   `json:"dns_zone_id"`
-	SlackWebHook  string   `json:"slack_webhook"`
-	EcsVolumeSize int      `json:"ecs_volume_size"`
-	EcsCPU        int      `json:"ecs_cpu"`
-	EcsMemory     int      `json:"ecs_memory"`
-	SourceBranch  string   `json:"source_branch"`
-	BastionAMIID  string   `json:"bastion_ami_id"`
-	RsbServices   []string `json:"rsb_services"`
+	Name                   string   `json:"name" binding:"required"`
+	Domain                 string   `json:"domain"`
+	DNSZoneID              string   `json:"dns_zone_id"`
+	SlackWebHook           string   `json:"slack_webhook"`
+	EcsVolumeSize          int      `json:"ecs_volume_size"`
+	EcsCPU                 int      `json:"ecs_cpu"`
+	EcsMemory              int      `json:"ecs_memory"`
+	SourceBranch           string   `json:"source_branch"`
+	BastionAMIID           string   `json:"bastion_ami_id"`
+	BrokerDriver           string   `json:"broker_driver"`
+	ServicesCORSOriginURLs string   `json:"services_cors_origin_urls"`
+	RsbServices            []string `json:"rsb_services"`
 }
 
 func (e environment) Validate() error {
@@ -53,6 +55,14 @@ func (e *environment) SetDefaults(cfg config) {
 
 	if e.BastionAMIID == "" {
 		e.BastionAMIID = "ami-0aef57767f5404a3c"
+	}
+
+	if e.BrokerDriver == "" {
+		e.BrokerDriver = "rabbitmq"
+	}
+
+	if e.ServicesCORSOriginURLs == "" {
+		e.ServicesCORSOriginURLs = "http://localhost:8080"
 	}
 
 	if len(e.RsbServices) == 0 {
