@@ -54,7 +54,7 @@ func (e *environment) SetDefaults(cfg config) {
 	}
 
 	if e.BastionAMIID == "" {
-		e.BastionAMIID = "ami-0aef57767f5404a3c"
+		e.BastionAMIID = "ami-08bac620dc84221eb"
 	}
 
 	if e.BrokerDriver == "" {
