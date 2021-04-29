@@ -328,7 +328,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating cert validation for wildcard: %w", err)
 		}
 
-		dbMasterUserPassword, err := random.NewRandomPassword(ctx, "password-db-master-user-password-"+env.Name, &random.RandomPasswordArgs{
+		dbMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-db-master-user-password-"+env.Name, &random.RandomPasswordArgs{
 			Length:  pulumi.Int(32),
 			Lower:   pulumi.Bool(true),
 			Upper:   pulumi.Bool(true),
@@ -338,14 +338,14 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating db master user password: %w", err)
 		}
 
-		if cred.DBMasterUserPassword == "" {
-			dbMasterUserPassword.Result.ApplyT(func(result string) string {
-				cred.DBMasterUserPassword = result
-				return result
-			})
-		}
+		dbMasterUserPassword := dbMasterUserPasswordGenerated.Result.ApplyT(func(result string) string {
+			if cred.DBMasterUserPassword != "" {
+				return cred.DBMasterUserPassword
+			}
+			return result
+		}).(pulumi.StringOutput)
 
-		rmqMasterUserPassword, err := random.NewRandomPassword(ctx, "password-rmq-master-user-password-"+env.Name, &random.RandomPasswordArgs{
+		rmqMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-rmq-master-user-password-"+env.Name, &random.RandomPasswordArgs{
 			Length:  pulumi.Int(32),
 			Lower:   pulumi.Bool(true),
 			Upper:   pulumi.Bool(true),
@@ -355,12 +355,18 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rmq master user password: %w", err)
 		}
 
-		if cred.RMQMasterUserPassword == "" {
-			rmqMasterUserPassword.Result.ApplyT(func(result string) string {
-				cred.RMQMasterUserPassword = result
-				return result
-			})
-		}
+		rmqMasterUserPassword := rmqMasterUserPasswordGenerated.Result.ApplyT(func(result string) string {
+			if cred.RMQMasterUserPassword != "" {
+				return cred.RMQMasterUserPassword
+			}
+			return result
+		}).(pulumi.StringOutput)
+
+		UserDataBase64 := pulumi.All(dbMasterUserPassword, rmqMasterUserPassword).ApplyT(func(args []interface{}) string {
+			return base64.StdEncoding.EncodeToString(
+				[]byte(fmt.Sprintf("#!/bin/bash\ncd /root\nprintf \"\\nmachine github.com\nlogin roam\npassword %s\" >> .netrc\ngit clone https://github.com/RingierIMU/rsb-deploy.git\necho -n \"%s\" > RMQMasterUserPassword\necho -n \"%s\" > DBMasterUserPassword\necho -n \"%s\" > RSB_Env\necho -n \"%s\" > SLACK_WEBHOOK\ncd ./rsb-deploy/aws/bastion/\n./setup.sh", cred.GithubAuthToken, args[1].(string), args[0].(string), env.Name, env.SlackWebHook)),
+			)
+		}).(pulumi.StringOutput)
 
 		// Bastion instance
 		// NOTE: perpetual diff for EbsBlockDevices so using default with AMI
@@ -372,14 +378,10 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			VpcSecurityGroupIds: pulumi.StringArray{
 				sg.ID(),
 			},
-			UserDataBase64: pulumi.String(
-				base64.StdEncoding.EncodeToString(
-					[]byte(fmt.Sprintf("#!/bin/bash\ncd /root\nprintf \"\\nmachine github.com\nlogin roam\npassword %s\" >> .netrc\ngit clone https://github.com/RingierIMU/rsb-deploy.git\necho -n \"%s\" > RMQMasterUserPassword\necho -n \"%s\" > DBMasterUserPassword\necho -n \"%s\" > RSB_Env\necho -n \"%s\" > SLACK_WEBHOOK\ncd ./rsb-deploy/aws/bastion/\n./setup.sh", cred.GithubAuthToken, cred.RMQMasterUserPassword, cred.DBMasterUserPassword, env.Name, env.SlackWebHook)),
-				),
-			),
-			VolumeTags: tags,
-			Tags:       tags,
-		}, pulumi.DependsOn([]pulumi.Resource{dbMasterUserPassword, rmqMasterUserPassword}))
+			UserDataBase64: UserDataBase64,
+			VolumeTags:     tags,
+			Tags:           tags,
+		})
 		if err != nil {
 			return fmt.Errorf("creating ec2 instance for bastion: %w", err)
 		}
@@ -817,7 +819,15 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				vpcLinks[rsbService] = vpcLink
 			}
 
-			containerDefinitions := pulumi.All(branch.Branch, repo.RepositoryUrl, elc.CacheNodes.Index(pulumi.Int(0)).Address(), apigw.ID().ToStringOutput(), rsbService).ApplyT(func(args []interface{}) (string, error) {
+			containerDefinitions := pulumi.All(
+				branch.Branch,
+				repo.RepositoryUrl,
+				elc.CacheNodes.Index(pulumi.Int(0)).Address(),
+				apigw.ID().ToStringOutput(),
+				rsbService,
+				dbMasterUserPassword,
+				rmqMasterUserPassword,
+			).ApplyT(func(args []interface{}) (string, error) {
 				rsbService := args[4].(string)
 
 				baseTaskDef, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbService, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
@@ -854,6 +864,8 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				svcShortName := shortName(rsbService)
 				elcHostname := args[2].(*string)
 				apigwID := args[3].(string)
+				dbMasterUserPassword := args[5].(string)
+				rmqMasterUserPassword := args[6].(string)
 
 				mappings := map[string]string{
 					"REPLACEME_RSBServicesCORSOriginURLs":       fmt.Sprintf("%s,https://admin-ui.services.%s.%s", env.ServicesCORSOriginURLs, env.Name, env.Domain),
@@ -868,11 +880,11 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					// "REPLACEME_DB_HOST":                          env.DBHostname,
 					// "REPLACEME_DBHostname":                       env.DBHostname,
 					// "REPLACEME_RMQMasterUsername":                env.RMQMasterUsername,
-					"REPLACEME_RMQMasterUserPassword": cred.RMQMasterUserPassword,
+					"REPLACEME_RMQMasterUserPassword": rmqMasterUserPassword,
 					// "REPLACEME_RMQVHost":                         env.RMQVHost,
 					// "REPLACEME_RMQServer":                        rmqServer(),
 					// "REPLACEME_DBMasterUsername":                 env.DBMasterUsername,
-					"REPLACEME_DBMasterUserPassword": cred.DBMasterUserPassword,
+					"REPLACEME_DBMasterUserPassword": dbMasterUserPassword,
 					"REPLACEME_AwsAccessKeyID":       cred.AWSAccessKeyID,
 					"REPLACEME_AwsRegion":            cred.AWSRegion,
 					"REPLACEME_AwsSecretAccessKey":   cred.AWSSecretAccessKey,
