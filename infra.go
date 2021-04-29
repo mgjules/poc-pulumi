@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/apigateway"
@@ -438,7 +440,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Elastic cache cluster
-		_, err = elasticache.NewCluster(ctx, "elc-cluster-"+env.Name, &elasticache.ClusterArgs{
+		elc, err := elasticache.NewCluster(ctx, "elc-cluster-"+env.Name, &elasticache.ClusterArgs{
 			ClusterId:         pulumi.String(env.Name),
 			NodeType:          pulumi.String("cache.t2.micro"),
 			SubnetGroupName:   elcSubnetGroup.Name,
@@ -553,7 +555,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating ecs cluster: %w", err)
 		}
 
-		_, err = iam.NewRole(ctx, "role-ecs-cluster-"+env.Name, &iam.RoleArgs{
+		roleExecution, err := iam.NewRole(ctx, "role-ecs-cluster-"+env.Name, &iam.RoleArgs{
 			Name:             pulumi.Sprintf("%s_ecsTaskExecutionRole", env.Name),
 			Description:      pulumi.String(env.Name),
 			Path:             pulumi.String("/service-role/"),
@@ -638,7 +640,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		vpcLinks := make(map[string]*apigateway.VpcLink)
 		for _, rsbService := range env.RsbServices {
-			_, err = ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService, env.Name), &ecr.RepositoryArgs{
+			repo, err := ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService, env.Name), &ecr.RepositoryArgs{
 				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService),
 				Tags: tags,
 			})
@@ -654,15 +656,6 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			if err != nil {
 				return fmt.Errorf("creating branch [%s]: %w", rsbService, err)
 			}
-
-			_ = branch.Branch.ApplyT(func(name string) (string, error) {
-				baseTaskDef, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbService, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
-				if err != nil {
-					return "", fmt.Errorf("fetch base task def [%s]: %w", rsbService, err)
-				}
-
-				return baseTaskDef, nil
-			}).(pulumi.StringOutput)
 
 			tg, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("tg-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
 				Name:       pulumi.Sprintf(shortEnvName(env.Name, rsbService)),
@@ -824,6 +817,127 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				vpcLinks[rsbService] = vpcLink
 			}
 
+			containerDefinitions := pulumi.All(branch.Branch, repo.RepositoryUrl, elc.CacheNodes.Index(pulumi.Int(0)).Address(), apigw.ID().ToStringOutput(), rsbService).ApplyT(func(args []interface{}) (string, error) {
+				rsbService := args[4].(string)
+
+				baseTaskDef, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbService, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
+				if err != nil {
+					return "", fmt.Errorf("fetch base task def [%s]: %w", rsbService, err)
+				}
+
+				var containerDefinitions = struct {
+					Definitions []map[string]interface{} `json:"containerDefinitions"`
+				}{}
+
+				err = json.Unmarshal([]byte(baseTaskDef), &containerDefinitions)
+				if err != nil {
+					return "", fmt.Errorf("unmarshal base task def [%s]: %w", rsbService, err)
+				}
+
+				containerDefinitions.Definitions[0]["name"] = rsbService
+				containerDefinitions.Definitions[0]["portMappings"] = []map[string]interface{}{
+					{
+						"containerPort": 80,
+						"hostPort":      80,
+						"protocol":      "tcp",
+					},
+				}
+				containerDefinitions.Definitions[0]["ulimits"] = []map[string]interface{}{
+					{
+						"name":      "nofile",
+						"softLimit": 1024000,
+						"hardLimit": 1024000,
+					},
+				}
+				containerDefinitions.Definitions[0]["image"] = fmt.Sprintf("%s:%s", args[1], env.Name)
+
+				svcShortName := shortName(rsbService)
+				elcHostname := args[2].(*string)
+				apigwID := args[3].(string)
+
+				mappings := map[string]string{
+					// "REPLACEME_RSBServicesCORSOriginURLs":       fmt.Sprintf("%s,https://admin-ui.services.%s.%s", env.ServicesCORSOriginURLs, env.Name, env.Domain),
+					"REPLACEME_BASTION_HOST":                    fmt.Sprintf("bastion.%s.%s", env.Name, env.Domain),
+					"REPLACEME_AWS_API_GW_ID":                   apigwID,
+					"REPLACEME_RSB_API_BASE_URL":                fmt.Sprintf("https://%s.execute-api.eu-west-1.amazonaws.com/v1", apigwID),
+					"REPLACEME_SERVICE_REGISTRY_BASE_URL":       fmt.Sprintf("https://servicerepository.services.%s.%s", env.Name, env.Domain),
+					"REPLACEME_VENTURE_CONFIG_SERVICE_BASE_URL": fmt.Sprintf("https://ventureconfig.services.%s.%s", env.Name, env.Domain),
+					"REPLACEME_FEEDER_URL":                      fmt.Sprintf("https://feeder.services.%s.%s", env.Name, env.Domain),
+					"REPLACEME_USER_SERVICE_BASE_URL":           fmt.Sprintf("https://users.services.%s.%s", env.Name, env.Domain),
+					// "REPLACEME_E2EMON_BASE_URL":                  e2eMonBaseUrl(),
+					// "REPLACEME_DB_HOST":                          env.DBHostname,
+					// "REPLACEME_DBHostname":                       env.DBHostname,
+					// "REPLACEME_RMQMasterUsername":                env.RMQMasterUsername,
+					"REPLACEME_RMQMasterUserPassword": cred.RMQMasterUserPassword,
+					// "REPLACEME_RMQVHost":                         env.RMQVHost,
+					// "REPLACEME_RMQServer":                        rmqServer(),
+					// "REPLACEME_DBMasterUsername":                 env.DBMasterUsername,
+					// "REPLACEME_DBMasterUserPassword":             cred.DBMasterUserPassword,
+					"REPLACEME_AwsAccessKeyID":      cred.AWSAccessKeyID,
+					"REPLACEME_AwsRegion":           cred.AWSRegion,
+					"REPLACEME_AwsSecretAccessKey":  cred.AWSSecretAccessKey,
+					"REPLACEME_GithubOrgname":       cred.GithubOrgName,
+					"REPLACEME_GithubOauthToken":    cred.GithubAuthToken,
+					"REPLACEME_DNSZoneID":           env.DNSZoneID,
+					"REPLACEME_Domain":              env.Domain,
+					"REPLACEME_LibDBTable":          fmt.Sprintf("%s_%s", env.Name, svcShortName),
+					"REPLACEME_DB_DATABASE":         fmt.Sprintf("%s_%s", env.Name, svcShortName),
+					"REPLACEME_SLACK_WEBHOOK":       env.SlackWebHook,
+					"REPLACEME_ElasticacheHostname": *elcHostname,
+					// "REPLACEME_ELASTICSEARCH_URL":                fmt.Sprintf("https://%s", env.ElasticSearchEndpoint),
+					"REPLACEME_SERVICE_REGISTRY_CACHE_TAG":       fmt.Sprintf("rsb_sr_%s", env.Name),
+					"REPLACEME_VENTURE_CONFIG_SERVICE_CACHE_TAG": fmt.Sprintf("rsb_vc_%s", env.Name),
+					"REPLACEME_BACKUP_INTERVAL":                  "5",
+					"REPLACEME_RSB_ENV":                          env.Name,
+					// "REPLACEME_DATADOG_API_BASE_URL":             env.DDApiBaseURL,
+					// "REPLACEME_DATADOG_API_KEY":                  env.DDApiKey,
+					// "REPLACEME_DATADOG_APP_KEY":                  env.DDAppKey,
+					"REPLACEME_RELEASE_NAME": env.Name,
+					// "REPLACEME_MESSAGE_BROKER_DRIVER":            env.BrokerDriver,
+					// "REPLACEME_MqAMQPPort":                       env.MqAMQPPort,
+					// "REPLACEME_MqRabbitAdminPort":                env.MqRabbitAdminPort,
+					// "REPLACEME_RMQAdminURL":                      env.RMQAdminURL,
+					// "REPLACEME_MqProtocol":                       env.MqProtocol,
+				}
+
+				environments, ok := containerDefinitions.Definitions[0]["environment"].([]interface{})
+				if !ok {
+					return "", fmt.Errorf("unexpected environments type [%s]", rsbService)
+				}
+
+				for i, raw := range environments {
+					environment := raw.(map[string]interface{})
+					if val, found := mappings[environment["value"].(string)]; found {
+						environment["value"] = val
+					}
+					environments[i] = environment
+				}
+
+				containerDefinitions.Definitions[0]["environment"] = environments
+
+				jsonB, err := json.Marshal(containerDefinitions.Definitions)
+				if err != nil {
+					return "", fmt.Errorf("marshal base task def [%s]: %w", rsbService, err)
+				}
+
+				return string(jsonB), nil
+			}).(pulumi.StringOutput)
+
+			_, err = ecs.NewTaskDefinition(ctx, fmt.Sprintf("task-def-%s-%s", rsbService, env.Name), &ecs.TaskDefinitionArgs{
+				ContainerDefinitions: containerDefinitions,
+				Family:               pulumi.Sprintf("%s-%s", env.Name, rsbService),
+				ExecutionRoleArn:     roleExecution.Arn,
+				NetworkMode:          pulumi.String("awsvpc"),
+				Cpu:                  pulumi.String(strconv.Itoa(env.EcsCPU)),
+				Memory:               pulumi.String(strconv.Itoa(env.EcsMemory)),
+				RequiresCompatibilities: pulumi.StringArray{
+					pulumi.String("FARGATE"),
+				},
+				Tags: tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating task definition [%s]: %w", rsbService, err)
+			}
 		}
 
 		_, err = apigateway.NewIntegration(ctx, "api-gw-integ-events-"+env.Name, &apigateway.IntegrationArgs{
