@@ -477,7 +477,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rest api gw resource events: %w", err)
 		}
 
-		_, err = apigateway.NewMethod(ctx, "api-gw-method-events-"+env.Name, &apigateway.MethodArgs{
+		methodEvents, err := apigateway.NewMethod(ctx, "api-gw-method-events-"+env.Name, &apigateway.MethodArgs{
 			RestApi:        apigw.ID(),
 			ResourceId:     resEvents.ID(),
 			ApiKeyRequired: pulumi.Bool(true),
@@ -500,7 +500,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rest api gw resource login: %w", err)
 		}
 
-		_, err = apigateway.NewMethod(ctx, "api-gw-method-login-"+env.Name, &apigateway.MethodArgs{
+		methodLogin, err := apigateway.NewMethod(ctx, "api-gw-method-login-"+env.Name, &apigateway.MethodArgs{
 			RestApi:        apigw.ID(),
 			ResourceId:     resLogin.ID(),
 			ApiKeyRequired: pulumi.Bool(false),
@@ -636,6 +636,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating elb https listener: %w", err)
 		}
 
+		vpcLinks := make(map[string]*apigateway.VpcLink)
 		for _, rsbService := range env.RsbServices {
 			_, err = ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService, env.Name), &ecr.RepositoryArgs{
 				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService),
@@ -811,39 +812,49 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					return fmt.Errorf("creating nlb https listener [%s]: %w", rsbService, err)
 				}
 
+				vpcLink, err := apigateway.NewVpcLink(ctx, fmt.Sprintf("vpc-link-%s-%s", rsbService, env.Name), &apigateway.VpcLinkArgs{
+					Name:      pulumi.Sprintf("%s-%s", env.Name, rsbService),
+					TargetArn: nlb.Arn,
+					Tags:      tags,
+				})
+				if err != nil {
+					return fmt.Errorf("creating vpc link [%s]: %w", rsbService, err)
+				}
+
+				vpcLinks[rsbService] = vpcLink
 			}
 
 		}
 
-		// TODO: need feeder nlb vpc link
-		// _, err = apigateway.NewIntegration(ctx, "api-gw-integ-events-"+env.Name, &apigateway.IntegrationArgs{
-		// 	RestApi:               apigw.ID(),
-		// 	ResourceId:            resEvents.ID(),
-		// 	HttpMethod:            methodEvents.HttpMethod,
-		// 	IntegrationHttpMethod: methodEvents.HttpMethod,
-		// 	Type:                  pulumi.String("HTTP"),
-		// 	PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
-		// 	ConnectionType:        pulumi.String("VPC_LINK"),
-		// 	Uri:                   pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.Domain),
-		// })
-		// if err != nil {
-		// 	return fmt.Errorf("creating rest api gw integration events: %w", err)
-		// }
+		_, err = apigateway.NewIntegration(ctx, "api-gw-integ-events-"+env.Name, &apigateway.IntegrationArgs{
+			RestApi:               apigw.ID(),
+			ResourceId:            resEvents.ID(),
+			HttpMethod:            methodEvents.HttpMethod,
+			IntegrationHttpMethod: methodEvents.HttpMethod,
+			Type:                  pulumi.String("HTTP"),
+			PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
+			ConnectionType:        pulumi.String("VPC_LINK"),
+			ConnectionId:          vpcLinks["rsb-service-feeder"].ID(),
+			Uri:                   pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.Domain),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw integration events: %w", err)
+		}
 
-		// TODO: need user nlb vpc link
-		// _, err = apigateway.NewIntegration(ctx, "api-gw-integ-login-"+env.Name, &apigateway.IntegrationArgs{
-		// 	RestApi:               apigw.ID(),
-		// 	ResourceId:            resLogin.ID(),
-		// 	HttpMethod:            methodLogin.HttpMethod,
-		// 	IntegrationHttpMethod: methodLogin.HttpMethod,
-		// 	Type:                  pulumi.String("HTTP"),
-		// 	PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
-		// 	ConnectionType:        pulumi.String("VPC_LINK"),
-		// 	Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.Domain),
-		// })
-		// if err != nil {
-		// 	return fmt.Errorf("creating rest api gw integration login: %w", err)
-		// }
+		_, err = apigateway.NewIntegration(ctx, "api-gw-integ-login-"+env.Name, &apigateway.IntegrationArgs{
+			RestApi:               apigw.ID(),
+			ResourceId:            resLogin.ID(),
+			HttpMethod:            methodLogin.HttpMethod,
+			IntegrationHttpMethod: methodLogin.HttpMethod,
+			Type:                  pulumi.String("HTTP"),
+			PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
+			ConnectionType:        pulumi.String("VPC_LINK"),
+			ConnectionId:          vpcLinks["rsb-service-users"].ID(),
+			Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.Domain),
+		})
+		if err != nil {
+			return fmt.Errorf("creating rest api gw integration login: %w", err)
+		}
 
 		// TODO: implement current infra setup (mq+fargate)
 
