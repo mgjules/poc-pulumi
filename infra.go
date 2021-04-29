@@ -835,7 +835,10 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
 			ConnectionType:        pulumi.String("VPC_LINK"),
 			ConnectionId:          vpcLinks["rsb-service-feeder"].ID(),
-			Uri:                   pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.Domain),
+			RequestParameters: pulumi.StringMap{
+				"integration.request.header.x-api-key": pulumi.String("method.request.header.x-api-key"),
+			},
+			Uri: pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.Domain),
 		})
 		if err != nil {
 			return fmt.Errorf("creating rest api gw integration events: %w", err)
