@@ -777,7 +777,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 							TargetGroupArn: tgNLB.Arn,
 						},
 					},
-				}, pulumi.Parent(lbMain))
+				}, pulumi.Parent(nlb))
 				if err != nil {
 					return fmt.Errorf("creating nlb http listener [%s]: %w", rsbService, err)
 				}
@@ -793,7 +793,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 							TargetGroupArn: tgNLB.Arn,
 						},
 					},
-				}, pulumi.Parent(lbMain))
+				}, pulumi.Parent(nlb))
 				if err != nil {
 					return fmt.Errorf("creating nlb https listener [%s]: %w", rsbService, err)
 				}
