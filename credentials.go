@@ -6,6 +6,8 @@ type credentials struct {
 	AWSRegion             string `json:"aws_region"`
 	GithubAuthToken       string `json:"github_auth_token"`
 	GithubOrgName         string `json:"github_org_name"`
+	DockerHubUsername     string `json:"dockerhub_username"`
+	DockerHubPassword     string `json:"dockerhub_password"`
 	DBMasterUserPassword  string `json:"db_master_user_password"`
 	RMQMasterUserPassword string `json:"rmq_master_user_password"`
 }

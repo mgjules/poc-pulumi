@@ -8,6 +8,8 @@ import (
 
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/apigateway"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/codebuild"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/codepipeline"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ecr"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ecs"
@@ -571,12 +573,40 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating role task exec ecs cluster: %w", err)
 		}
 
-		_, err = s3.NewBucket(ctx, "bucket-codepipeline-"+env.Name, &s3.BucketArgs{
+		bucketArtifacts, err := s3.NewBucket(ctx, "bucket-codepipeline-"+env.Name, &s3.BucketArgs{
 			Bucket: pulumi.Sprintf("%s-ci-cd-artifacts", env.Name),
 			Tags:   tags,
 		})
 		if err != nil {
 			return fmt.Errorf("creating bucket codepipeline: %w", err)
+		}
+
+		roleCodepipeline, err := iam.NewRole(ctx, "role-codepipeline-"+env.Name, &iam.RoleArgs{
+			Name:             pulumi.Sprintf("%s_rsb-codepipeline-role", env.Name),
+			Description:      pulumi.String(env.Name),
+			Path:             pulumi.String("/service-role/"),
+			AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codepipeline.amazonaws.com"},"Action":"sts:AssumeRole"}]}`),
+			ManagedPolicyArns: pulumi.StringArray{
+				pulumi.String("arn:aws:iam::aws:policy/AdministratorAccess"),
+			},
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating role codepipeline: %w", err)
+		}
+
+		roleBuildpipeline, err := iam.NewRole(ctx, "role-buildpipeline-"+env.Name, &iam.RoleArgs{
+			Name:             pulumi.Sprintf("%s_rsb-buildpipeline-role", env.Name),
+			Description:      pulumi.String(env.Name),
+			Path:             pulumi.String("/service-role/"),
+			AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}`),
+			ManagedPolicyArns: pulumi.StringArray{
+				pulumi.String("arn:aws:iam::aws:policy/AdministratorAccess"),
+			},
+			Tags: tags,
+		})
+		if err != nil {
+			return fmt.Errorf("creating role buildpipeline: %w", err)
 		}
 
 		// Main load balancer
@@ -965,6 +995,165 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating task definition [%s]: %w", rsbService, err)
 			}
 
+			_, err = codebuild.NewProject(ctx, fmt.Sprintf("cb-project-%s-%s", rsbService, env.Name), &codebuild.ProjectArgs{
+				Artifacts: codebuild.ProjectArtifactsArgs{
+					Type: pulumi.String("NO_ARTIFACTS"),
+				},
+				Description: pulumi.Sprintf("Build project for %s in %s", rsbService, env.Name),
+				Environment: codebuild.ProjectEnvironmentArgs{
+					ComputeType:              pulumi.String("BUILD_GENERAL1_SMALL"),
+					Image:                    pulumi.String("aws/codebuild/standard:1.0"),
+					ImagePullCredentialsType: pulumi.String("CODEBUILD"),
+					PrivilegedMode:           pulumi.Bool(true),
+					Type:                     pulumi.String("LINUX_CONTAINER"),
+					EnvironmentVariables: codebuild.ProjectEnvironmentEnvironmentVariableArray{
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("RSB_TAG"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.String(env.Name),
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("RSB_REPOSITORY_URI"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: repo.RepositoryUrl,
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("RSB_SLACK_WEBHOOK"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.String(env.SlackWebHook),
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("RSB_DOMAIN"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.String(env.Domain),
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("RSB_BASTION_HOST"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.Sprintf("srv.%s.%s", env.Name, env.Domain),
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("RSB_ENV_BASTION_URL"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.Sprintf("http://bastion.%s.%s", env.Name, env.Domain),
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("GITHUBOAUTHTOKEN"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.String(cred.GithubAuthToken),
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("DOCKER_USER"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.String(cred.DockerHubUsername),
+						},
+						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+							Name:  pulumi.String("DOCKER_PASSWORD"),
+							Type:  pulumi.String("PLAINTEXT"),
+							Value: pulumi.String(cred.DockerHubPassword),
+						},
+					},
+				},
+				Name:        pulumi.Sprintf("%s_%s", env.Name, rsbService),
+				ServiceRole: roleBuildpipeline.Arn,
+				Source: &codebuild.ProjectSourceArgs{
+					GitCloneDepth: pulumi.Int(1),
+					Location:      pulumi.Sprintf("https://github.com/%s/%s.git", cred.GithubOrgName, rsbService),
+					Type:          pulumi.String("GITHUB"),
+				},
+				SourceVersion: pulumi.String(env.Name),
+				Tags:          tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating codebuild project [%s]: %w", rsbService, err)
+			}
+
+			_, err = codepipeline.NewPipeline(ctx, fmt.Sprintf("code-pipeline-%s-%s", rsbService, env.Name), &codepipeline.PipelineArgs{
+				ArtifactStore: codepipeline.PipelineArtifactStoreArgs{
+					Location: bucketArtifacts.Bucket,
+					Type:     pulumi.String("S3"),
+				},
+				Name:    pulumi.Sprintf("%s@%s", rsbService, env.Name),
+				RoleArn: roleCodepipeline.Arn,
+				Stages: codepipeline.PipelineStageArray{
+					// Stage 1: Checkout sourcecode
+					codepipeline.PipelineStageArgs{
+						Name: pulumi.String("SourceStage"),
+						Actions: codepipeline.PipelineStageActionArray{
+							codepipeline.PipelineStageActionArgs{
+								Region:   pulumi.String(cred.AWSRegion),
+								Category: pulumi.String("Source"),
+								Owner:    pulumi.String("ThirdParty"),
+								Provider: pulumi.String("GitHub"),
+								Version:  pulumi.String("1"),
+								OutputArtifacts: pulumi.StringArray{
+									pulumi.String("source"),
+								},
+								Configuration: pulumi.StringMap{
+									"Owner":                pulumi.String(cred.GithubOrgName),
+									"Repo":                 pulumi.String(rsbService),
+									"PollForSourceChanges": pulumi.String("true"),
+									"Branch":               pulumi.String(env.Name),
+									"OAuthToken":           pulumi.String(cred.GithubAuthToken),
+								},
+								Name:     pulumi.String("Source"),
+								RunOrder: pulumi.Int(1),
+							},
+						},
+					},
+					// Stage 2: Build & push docker image
+					codepipeline.PipelineStageArgs{
+						Name: pulumi.String("BuildStage"),
+						Actions: codepipeline.PipelineStageActionArray{
+							codepipeline.PipelineStageActionArgs{
+								Region:   pulumi.String(cred.AWSRegion),
+								Category: pulumi.String("Build"),
+								Owner:    pulumi.String("AWS"),
+								Provider: pulumi.String("CodeBuild"),
+								Version:  pulumi.String("1"),
+								Configuration: pulumi.StringMap{
+									"ProjectName": pulumi.Sprintf("%s_%s", env.Name, rsbService),
+								},
+								InputArtifacts: pulumi.StringArray{
+									pulumi.String("source"),
+								},
+								OutputArtifacts: pulumi.StringArray{
+									pulumi.String("imagedefinitions"),
+								},
+								Name:     pulumi.String("BuildAction"),
+								RunOrder: pulumi.Int(333),
+							},
+						},
+					},
+					// Stage 3: Deploy to ECS cluster / update service
+					codepipeline.PipelineStageArgs{
+						Name: pulumi.String("DeployStage"),
+						Actions: codepipeline.PipelineStageActionArray{
+							codepipeline.PipelineStageActionArgs{
+								Region:   pulumi.String(cred.AWSRegion),
+								Category: pulumi.String("Deploy"),
+								Owner:    pulumi.String("AWS"),
+								Provider: pulumi.String("ECS"),
+								Version:  pulumi.String("1"),
+								Configuration: pulumi.StringMap{
+									"ClusterName": pulumi.String(env.Name),
+									"ServiceName": pulumi.String(rsbService),
+								},
+								InputArtifacts: pulumi.StringArray{
+									pulumi.String("imagedefinitions"),
+								},
+								Name:     pulumi.String("DeployAction"),
+								RunOrder: pulumi.Int(666),
+							},
+						},
+					},
+				},
+				Tags: tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating code pipeline [%s]: %w", rsbService, err)
+			}
+
 			_, err = ecs.NewService(ctx, fmt.Sprintf("ecs-service-%s-%s", rsbService, env.Name), &ecs.ServiceArgs{
 				Cluster:        cluster.ID(),
 				Name:           pulumi.String(rsbService),
@@ -1032,8 +1221,6 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		if err != nil {
 			return fmt.Errorf("creating rest api gw stage: %w", err)
 		}
-
-		// TODO: implement current infra setup (codepipeline)
 
 		ctx.Export("vpc", vpc.Arn)
 		return nil
