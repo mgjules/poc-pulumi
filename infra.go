@@ -574,8 +574,9 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		bucketArtifacts, err := s3.NewBucket(ctx, "bucket-codepipeline-"+env.Name, &s3.BucketArgs{
-			Bucket: pulumi.Sprintf("%s-ci-cd-artifacts", env.Name),
-			Tags:   tags,
+			Bucket:       pulumi.Sprintf("%s-ci-cd-artifacts", env.Name),
+			ForceDestroy: pulumi.Bool(true),
+			Tags:         tags,
 		})
 		if err != nil {
 			return fmt.Errorf("creating bucket codepipeline: %w", err)
