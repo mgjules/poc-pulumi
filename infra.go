@@ -951,10 +951,10 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					// "REPLACEME_DATADOG_APP_KEY":                  env.DDAppKey,
 					"REPLACEME_RELEASE_NAME":          env.Name,
 					"REPLACEME_MESSAGE_BROKER_DRIVER": env.BrokerDriver,
-					// "REPLACEME_MqAMQPPort":                       env.MqAMQPPort,
-					// "REPLACEME_MqRabbitAdminPort":                env.MqRabbitAdminPort,
-					// "REPLACEME_RMQAdminURL":                      env.RMQAdminURL,
-					// "REPLACEME_MqProtocol":                       env.MqProtocol,
+					"REPLACEME_MqAMQPPort":            "5672",
+					"REPLACEME_MqRabbitAdminPort":     "15672",
+					"REPLACEME_RMQAdminURL":           fmt.Sprintf("http://srv.%s.%s:15672", env.Name, env.Domain),
+					"REPLACEME_MqProtocol":            "amqp",
 				}
 
 				environments, ok := containerDefinitions.Definitions[0]["environment"].([]interface{})
