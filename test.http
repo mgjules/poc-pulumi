@@ -1,3 +1,4 @@
+### Create
 POST http://localhost:13337/api/environments
 Content-Type: application/json
 
@@ -7,14 +8,14 @@ Content-Type: application/json
     "domain": "520152236921.ritdu.tech"
 }
 
-###
+### Get
 
 GET http://localhost:13337/api/environments/mike
 Content-Type: application/json
 
 {}
 
-###
+### Update
 
 PUT http://localhost:13337/api/environments/mike
 Content-Type: application/json
@@ -25,7 +26,7 @@ Content-Type: application/json
     "domain": "520152236921.ritdu.tech"
 }
 
-###
+### Delete
 
 DELETE http://localhost:13337/api/environments/mike
 Content-Type: application/json
