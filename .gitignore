@@ -4,3 +4,5 @@ pulumi
 Pulumi.*.yaml
 poc-pulumi
 .pulumi
+.vscode
+__debug_bin
