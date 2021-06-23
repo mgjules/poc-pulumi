@@ -1055,7 +1055,13 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						},
 					},
 				},
-				Name:        pulumi.Sprintf("%s_%s", env.Name, rsbService),
+				Name: pulumi.Sprintf("%s_%s", env.Name, rsbService),
+				Cache: &codebuild.ProjectCacheArgs{
+					Modes: pulumi.StringArray{
+						pulumi.String("LOCAL_SOURCE_CACHE"),
+						pulumi.String("LOCAL_DOCKER_LAYER_CACHE"),
+					},
+				},
 				ServiceRole: roleBuildpipeline.Arn,
 				Source: &codebuild.ProjectSourceArgs{
 					GitCloneDepth: pulumi.Int(1),
