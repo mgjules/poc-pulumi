@@ -1003,7 +1003,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Description: pulumi.Sprintf("Build project for %s in %s", rsbService, env.Name),
 				Environment: codebuild.ProjectEnvironmentArgs{
 					ComputeType:              pulumi.String("BUILD_GENERAL1_SMALL"),
-					Image:                    pulumi.String("aws/codebuild/standard:1.0"),
+					Image:                    pulumi.String("aws/codebuild/standard:5.0"),
 					ImagePullCredentialsType: pulumi.String("CODEBUILD"),
 					PrivilegedMode:           pulumi.Bool(true),
 					Type:                     pulumi.String("LINUX_CONTAINER"),
