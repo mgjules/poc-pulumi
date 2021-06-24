@@ -1241,6 +1241,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			"rmq_admin_ui":       pulumi.Sprintf("%s:15672", bastionPubRecord.Fqdn),
 			"rmq_admin_password": rmqMasterUserPassword,
 			"services_routes":    pulumi.Map(serviceRecords),
+			"slack_webhook":      pulumi.String(env.SlackWebHook),
 		}))
 
 		return nil

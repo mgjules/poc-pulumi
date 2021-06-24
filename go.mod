@@ -9,4 +9,5 @@ require (
 	github.com/pulumi/pulumi-github/sdk/v4 v4.0.0
 	github.com/pulumi/pulumi-random/sdk/v4 v4.0.0
 	github.com/pulumi/pulumi/sdk/v3 v3.1.0
+	github.com/sirupsen/logrus v1.4.1
 )

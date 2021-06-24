@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optdestroy"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
+	log "github.com/sirupsen/logrus"
 )
 
 func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
@@ -53,14 +56,26 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
 		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
-		res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-			return
-		}
+		go func() {
+			start := time.Now()
+
+			res, err := s.Up(context.Background(), optup.ProgressStreams(os.Stdout))
+			if err != nil {
+				// c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while creating environment %q", envName)), req.SlackWebHook)
+				return
+			}
+
+			msg := fmt.Sprintf("Created environment %q with %v services on Domain %s in %s", envName, len(req.RsbServices), req.Domain, time.Since(start))
+			log.Infof(msg)
+			sendToSlackWebHook([]byte(msg), req.SlackWebHook)
+
+			result := res.Outputs["result"].Value.(map[string]interface{})
+			sendToSlackWebHook([]byte(createOverview(result)), req.SlackWebHook)
+		}()
 
 		c.JSON(http.StatusCreated, gin.H{
-			"result": res.Outputs["result"].Value,
+			"result": fmt.Sprintf("environment %q is being created", envName),
 		})
 	}
 }
@@ -154,19 +169,33 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
 		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
-		res, err := s.Up(ctx /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
-		if err != nil {
-			if auto.IsConcurrentUpdateError(err) {
-				c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in progress", envName)})
+		go func() {
+			start := time.Now()
+
+			_, err = s.Up(context.Background() /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
+			if err != nil {
+				if auto.IsConcurrentUpdateError(err) {
+					// c.JSON(http.StatusConflict, gin.H{"msg": fmt.Sprintf("environment %q already has update in progress", envName)})
+					sendToSlackWebHook([]byte(fmt.Sprintf("Environment %q already has update in progress", envName)), req.SlackWebHook)
+					return
+				}
+
+				// c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while updating environment %q", envName)), req.SlackWebHook)
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-			return
-		}
+			msg := fmt.Sprintf("Updated environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices), req.Domain, time.Since(start))
+			log.Infof(msg)
+			sendToSlackWebHook([]byte(msg), req.SlackWebHook)
 
-		c.JSON(http.StatusOK, gin.H{
-			"result": res.Outputs["result"].Value,
+			// Too noisy?
+			// result := res.Outputs["result"].Value.(map[string]interface{})
+			// sendToSlackWebHook([]byte(createOverview(result)), req.SlackWebHook)
+		}()
+
+		c.JSON(http.StatusCreated, gin.H{
+			"result": fmt.Sprintf("environment %q is being updated", envName),
 		})
 	}
 }
@@ -205,18 +234,39 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
 		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
-		if _, err = s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout)); err != nil {
+		outs, err := s.Outputs(ctx)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
 
-		if err = s.Workspace().RemoveStack(ctx, envName); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
-			return
-		}
+		result := outs["result"].Value.(map[string]interface{})
+		slackWebHook := result["slack_webhook"].(string)
+
+		go func() {
+			start := time.Now()
+
+			ctx := context.Background()
+
+			if _, err := s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout)); err != nil {
+				// 	c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while deleting environment %q", envName)), slackWebHook)
+				return
+			}
+
+			if err = s.Workspace().RemoveStack(ctx, envName); err != nil {
+				// c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while removing stack for environment %q", envName)), slackWebHook)
+				return
+			}
+
+			msg := fmt.Sprintf("Deleted environment %q in %s", envName, time.Since(start))
+			log.Infof(msg)
+			sendToSlackWebHook([]byte(msg), slackWebHook)
+		}()
 
 		c.JSON(http.StatusOK, gin.H{
-			"result": fmt.Sprintf("environment %q deleted", envName),
+			"result": fmt.Sprintf("environment %q is being deleted", envName),
 		})
 	}
 }
