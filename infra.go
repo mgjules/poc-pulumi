@@ -271,7 +271,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Validation CNAME record for certificate services
-		recordCertServices, err := route53.NewRecord(ctx, "record-cert-services-validation"+env.Name, &route53.RecordArgs{
+		recordCertServices, err := route53.NewRecord(ctx, "record-cert-services-validation-"+env.Name, &route53.RecordArgs{
 			Name: certServices.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordName().Elem(),
 			Type: certServices.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordType().Elem(),
 			Records: pulumi.StringArray{
@@ -306,7 +306,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Validation CNAME record for certificate wildcard
-		recordCertWildcard, err := route53.NewRecord(ctx, "record-cert-wildcard-validation"+env.Name, &route53.RecordArgs{
+		recordCertWildcard, err := route53.NewRecord(ctx, "record-cert-wildcard-validation-"+env.Name, &route53.RecordArgs{
 			Name: certWildcard.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordName().Elem(),
 			Type: certWildcard.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordType().Elem(),
 			Records: pulumi.StringArray{
@@ -673,25 +673,26 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		vpcLinks := make(map[string]*apigateway.VpcLink)
 		for _, rsbService := range env.RsbServices {
-			repo, err := ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService, env.Name), &ecr.RepositoryArgs{
-				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService),
+			repo, err := ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService.Name, env.Name), &ecr.RepositoryArgs{
+				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService.Name),
 				Tags: tags,
 			})
 			if err != nil {
-				return fmt.Errorf("creating repo [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating repo [%s]: %w", rsbService.Name, err)
 			}
 
-			branch, err := github.NewBranch(ctx, fmt.Sprintf("branch-%s-%s", rsbService, env.Name), &github.BranchArgs{
-				SourceBranch: pulumi.String(env.SourceBranch),
+			branch, err := github.NewBranch(ctx, fmt.Sprintf("branch-%s-%s", rsbService.Name, env.Name), &github.BranchArgs{
+				SourceBranch: pulumi.String(rsbService.SourceBranch),
+				SourceSha:    pulumi.String(rsbService.SourceCommit),
 				Branch:       pulumi.String(env.Name),
-				Repository:   pulumi.Sprintf("%s", rsbService),
+				Repository:   pulumi.String(rsbService.Name),
 			})
 			if err != nil {
-				return fmt.Errorf("creating branch [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating branch [%s]: %w", rsbService.Name, err)
 			}
 
-			tg, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("tg-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
-				Name:       pulumi.Sprintf(shortEnvName(env.Name, rsbService)),
+			tg, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("tg-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
+				Name:       pulumi.Sprintf(shortEnvName(env.Name, rsbService.Name)),
 				TargetType: pulumi.String("ip"),
 				Protocol:   pulumi.String("HTTP"),
 				Port:       pulumi.Int(80),
@@ -699,34 +700,34 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Tags:       tags,
 			})
 			if err != nil {
-				return fmt.Errorf("creating elb target group [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating elb target group [%s]: %w", rsbService.Name, err)
 			}
 
 			serviceLoadBalancers := ecs.ServiceLoadBalancerArray{
 				ecs.ServiceLoadBalancerArgs{
 					TargetGroupArn: tg.Arn,
-					ContainerName:  pulumi.String(rsbService),
+					ContainerName:  pulumi.String(rsbService.Name),
 					ContainerPort:  pulumi.Int(80),
 				},
 			}
 
-			randomOrder, err := random.NewRandomInteger(ctx, fmt.Sprintf("random-order-%s-%s", rsbService, env.Name), &random.RandomIntegerArgs{
+			randomOrder, err := random.NewRandomInteger(ctx, fmt.Sprintf("random-order-%s-%s", rsbService.Name, env.Name), &random.RandomIntegerArgs{
 				Min: pulumi.Int(1),
 				Max: pulumi.Int(999),
 			})
 			if err != nil {
-				return fmt.Errorf("creating random order integer [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating random order integer [%s]: %w", rsbService.Name, err)
 			}
 
-			randomPriority, err := random.NewRandomInteger(ctx, fmt.Sprintf("random-priority-%s-%s", rsbService, env.Name), &random.RandomIntegerArgs{
+			randomPriority, err := random.NewRandomInteger(ctx, fmt.Sprintf("random-priority-%s-%s", rsbService.Name, env.Name), &random.RandomIntegerArgs{
 				Min: pulumi.Int(1),
 				Max: pulumi.Int(4095),
 			})
 			if err != nil {
-				return fmt.Errorf("creating random priority integer [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating random priority integer [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-http-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
+			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-http-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
 				ListenerArn: listenerHTTP.Arn,
 				Actions: elasticloadbalancingv2.ListenerRuleActionArray{
 					elasticloadbalancingv2.ListenerRuleActionArgs{
@@ -739,7 +740,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					elasticloadbalancingv2.ListenerRuleConditionArgs{
 						HostHeader: elasticloadbalancingv2.ListenerRuleConditionHostHeaderArgs{
 							Values: pulumi.StringArray{
-								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService), env.Name, env.Domain),
+								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService.Name), env.Name, env.Domain),
 							},
 						},
 					},
@@ -747,10 +748,10 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Priority: randomPriority.Result,
 			}, pulumi.Parent(listenerHTTP))
 			if err != nil {
-				return fmt.Errorf("creating elb http listener rule [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating elb http listener rule [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-https-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
+			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-https-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
 				ListenerArn: listenerHTTPS.Arn,
 				Actions: elasticloadbalancingv2.ListenerRuleActionArray{
 					elasticloadbalancingv2.ListenerRuleActionArgs{
@@ -763,7 +764,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					elasticloadbalancingv2.ListenerRuleConditionArgs{
 						HostHeader: elasticloadbalancingv2.ListenerRuleConditionHostHeaderArgs{
 							Values: pulumi.StringArray{
-								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService), env.Name, env.Domain),
+								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService.Name), env.Name, env.Domain),
 							},
 						},
 					},
@@ -771,11 +772,11 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Priority: randomPriority.Result,
 			}, pulumi.Parent(listenerHTTPS))
 			if err != nil {
-				return fmt.Errorf("creating elb https listener rule [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating elb https listener rule [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = route53.NewRecord(ctx, fmt.Sprintf("record-https-%s-%s", rsbService, env.Name), &route53.RecordArgs{
-				Name: pulumi.Sprintf("%s.services.%s.%s.", shortName(rsbService), env.Name, env.Domain),
+			_, err = route53.NewRecord(ctx, fmt.Sprintf("record-https-%s-%s", rsbService.Name, env.Name), &route53.RecordArgs{
+				Name: pulumi.Sprintf("%s.services.%s.%s.", shortName(rsbService.Name), env.Name, env.Domain),
 				Type: route53.RecordTypeCNAME,
 				Records: pulumi.StringArray{
 					lbMain.DnsName,
@@ -784,12 +785,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Ttl:    pulumi.Int(300),
 			})
 			if err != nil {
-				return fmt.Errorf("creating record [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating record [%s]: %w", rsbService.Name, err)
 			}
 
-			if _apiGWServices[rsbService] {
-				nlb, err := elasticloadbalancingv2.NewLoadBalancer(ctx, fmt.Sprintf("lb-network-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.LoadBalancerArgs{
-					Name:             pulumi.String(shortEnvName(env.Name, rsbService)),
+			if _apiGWServices[rsbService.Name] {
+				nlb, err := elasticloadbalancingv2.NewLoadBalancer(ctx, fmt.Sprintf("lb-network-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.LoadBalancerArgs{
+					Name:             pulumi.String(shortEnvName(env.Name, rsbService.Name)),
 					LoadBalancerType: pulumi.String("network"),
 					Internal:         pulumi.Bool(true),
 					Subnets: pulumi.StringArray{
@@ -800,11 +801,11 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					Tags: tags,
 				})
 				if err != nil {
-					return fmt.Errorf("creating network load balancer [%s]: %w", rsbService, err)
+					return fmt.Errorf("creating network load balancer [%s]: %w", rsbService.Name, err)
 				}
 
-				tgNLB, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("nlb-tcp-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
-					Name:       pulumi.Sprintf("%s-nlb", shortEnvName(env.Name, rsbService)),
+				tgNLB, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("nlb-tcp-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
+					Name:       pulumi.Sprintf("%s-nlb", shortEnvName(env.Name, rsbService.Name)),
 					TargetType: pulumi.String("ip"),
 					Protocol:   pulumi.String("TCP"),
 					Port:       pulumi.Int(80),
@@ -812,16 +813,16 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					Tags:       tags,
 				})
 				if err != nil {
-					return fmt.Errorf("creating nlb target group [%s]: %w", rsbService, err)
+					return fmt.Errorf("creating nlb target group [%s]: %w", rsbService.Name, err)
 				}
 
 				serviceLoadBalancers = append(serviceLoadBalancers, ecs.ServiceLoadBalancerArgs{
 					TargetGroupArn: tgNLB.Arn,
-					ContainerName:  pulumi.String(rsbService),
+					ContainerName:  pulumi.String(rsbService.Name),
 					ContainerPort:  pulumi.Int(80),
 				})
 
-				_, err = elasticloadbalancingv2.NewListener(ctx, fmt.Sprintf("nlb-listener-http-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.ListenerArgs{
+				_, err = elasticloadbalancingv2.NewListener(ctx, fmt.Sprintf("nlb-listener-http-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.ListenerArgs{
 					LoadBalancerArn: nlb.Arn,
 					Protocol:        pulumi.String("TCP"),
 					Port:            pulumi.Int(80),
@@ -833,10 +834,10 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					},
 				}, pulumi.Parent(nlb))
 				if err != nil {
-					return fmt.Errorf("creating nlb http listener [%s]: %w", rsbService, err)
+					return fmt.Errorf("creating nlb http listener [%s]: %w", rsbService.Name, err)
 				}
 
-				_, err = elasticloadbalancingv2.NewListener(ctx, fmt.Sprintf("nlb-listener-https-%s-%s", rsbService, env.Name), &elasticloadbalancingv2.ListenerArgs{
+				_, err = elasticloadbalancingv2.NewListener(ctx, fmt.Sprintf("nlb-listener-https-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.ListenerArgs{
 					LoadBalancerArn: nlb.Arn,
 					Protocol:        pulumi.String("TLS"),
 					Port:            pulumi.Int(443),
@@ -849,19 +850,19 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					},
 				}, pulumi.Parent(nlb))
 				if err != nil {
-					return fmt.Errorf("creating nlb https listener [%s]: %w", rsbService, err)
+					return fmt.Errorf("creating nlb https listener [%s]: %w", rsbService.Name, err)
 				}
 
-				vpcLink, err := apigateway.NewVpcLink(ctx, fmt.Sprintf("vpc-link-%s-%s", rsbService, env.Name), &apigateway.VpcLinkArgs{
-					Name:      pulumi.Sprintf("%s-%s", env.Name, rsbService),
+				vpcLink, err := apigateway.NewVpcLink(ctx, fmt.Sprintf("vpc-link-%s-%s", rsbService.Name, env.Name), &apigateway.VpcLinkArgs{
+					Name:      pulumi.Sprintf("%s-%s", env.Name, rsbService.Name),
 					TargetArn: nlb.Arn,
 					Tags:      tags,
 				})
 				if err != nil {
-					return fmt.Errorf("creating vpc link [%s]: %w", rsbService, err)
+					return fmt.Errorf("creating vpc link [%s]: %w", rsbService.Name, err)
 				}
 
-				vpcLinks[rsbService] = vpcLink
+				vpcLinks[rsbService.Name] = vpcLink
 			}
 
 			containerDefinitions := pulumi.All(
@@ -869,15 +870,15 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				repo.RepositoryUrl,
 				elc.CacheNodes.Index(pulumi.Int(0)).Address(),
 				apigw.ID().ToStringOutput(),
-				rsbService,
+				rsbService.Name,
 				dbMasterUserPassword,
 				rmqMasterUserPassword,
 			).ApplyT(func(args []interface{}) (string, error) {
-				rsbService := args[4].(string)
+				rsbServiceName := args[4].(string)
 
-				baseTaskDef, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbService, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
+				baseTaskDef, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbServiceName, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
 				if err != nil {
-					return "", fmt.Errorf("fetch base task def [%s]: %w", rsbService, err)
+					return "", fmt.Errorf("fetch base task def [%s]: %w", rsbServiceName, err)
 				}
 
 				var containerDefinitions = struct {
@@ -886,10 +887,10 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 				err = json.Unmarshal([]byte(baseTaskDef), &containerDefinitions)
 				if err != nil {
-					return "", fmt.Errorf("unmarshal base task def [%s]: %w", rsbService, err)
+					return "", fmt.Errorf("unmarshal base task def [%s]: %w", rsbServiceName, err)
 				}
 
-				containerDefinitions.Definitions[0]["name"] = rsbService
+				containerDefinitions.Definitions[0]["name"] = rsbServiceName
 				containerDefinitions.Definitions[0]["portMappings"] = []map[string]interface{}{
 					{
 						"containerPort": 80,
@@ -906,7 +907,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				}
 				containerDefinitions.Definitions[0]["image"] = fmt.Sprintf("%s:%s", args[1], env.Name)
 
-				svcShortName := shortName(rsbService)
+				svcShortName := shortName(rsbServiceName)
 				elcHostname := args[2].(*string)
 				apigwID := args[3].(string)
 				dbMasterUserPassword := args[5].(string)
@@ -959,7 +960,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 				environments, ok := containerDefinitions.Definitions[0]["environment"].([]interface{})
 				if !ok {
-					return "", fmt.Errorf("unexpected environments type [%s]", rsbService)
+					return "", fmt.Errorf("unexpected environments type [%s]", rsbServiceName)
 				}
 
 				for i, raw := range environments {
@@ -974,15 +975,15 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 				jsonB, err := json.Marshal(containerDefinitions.Definitions)
 				if err != nil {
-					return "", fmt.Errorf("marshal base task def [%s]: %w", rsbService, err)
+					return "", fmt.Errorf("marshal base task def [%s]: %w", rsbServiceName, err)
 				}
 
 				return string(jsonB), nil
 			}).(pulumi.StringOutput)
 
-			taskDef, err := ecs.NewTaskDefinition(ctx, fmt.Sprintf("task-def-%s-%s", rsbService, env.Name), &ecs.TaskDefinitionArgs{
+			taskDef, err := ecs.NewTaskDefinition(ctx, fmt.Sprintf("task-def-%s-%s", rsbService.Name, env.Name), &ecs.TaskDefinitionArgs{
 				ContainerDefinitions: containerDefinitions,
-				Family:               pulumi.Sprintf("%s-%s", env.Name, rsbService),
+				Family:               pulumi.Sprintf("%s-%s", env.Name, rsbService.Name),
 				ExecutionRoleArn:     roleExecution.Arn,
 				NetworkMode:          pulumi.String("awsvpc"),
 				Cpu:                  pulumi.String(strconv.Itoa(env.EcsCPU)),
@@ -993,14 +994,14 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Tags: tags,
 			})
 			if err != nil {
-				return fmt.Errorf("creating task definition [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating task definition [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = codebuild.NewProject(ctx, fmt.Sprintf("cb-project-%s-%s", rsbService, env.Name), &codebuild.ProjectArgs{
+			_, err = codebuild.NewProject(ctx, fmt.Sprintf("cb-project-%s-%s", rsbService.Name, env.Name), &codebuild.ProjectArgs{
 				Artifacts: codebuild.ProjectArtifactsArgs{
 					Type: pulumi.String("NO_ARTIFACTS"),
 				},
-				Description: pulumi.Sprintf("Build project for %s in %s", rsbService, env.Name),
+				Description: pulumi.Sprintf("Build project for %s in %s", rsbService.Name, env.Name),
 				Environment: codebuild.ProjectEnvironmentArgs{
 					ComputeType:              pulumi.String("BUILD_GENERAL1_SMALL"),
 					Image:                    pulumi.String("aws/codebuild/standard:5.0"),
@@ -1055,7 +1056,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						},
 					},
 				},
-				Name: pulumi.Sprintf("%s_%s", env.Name, rsbService),
+				Name: pulumi.Sprintf("%s_%s", env.Name, rsbService.Name),
 				Cache: &codebuild.ProjectCacheArgs{
 					Modes: pulumi.StringArray{
 						pulumi.String("LOCAL_SOURCE_CACHE"),
@@ -1065,22 +1066,22 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				ServiceRole: roleBuildpipeline.Arn,
 				Source: &codebuild.ProjectSourceArgs{
 					GitCloneDepth: pulumi.Int(1),
-					Location:      pulumi.Sprintf("https://github.com/%s/%s.git", cred.GithubOrgName, rsbService),
+					Location:      pulumi.Sprintf("https://github.com/%s/%s.git", cred.GithubOrgName, rsbService.Name),
 					Type:          pulumi.String("GITHUB"),
 				},
 				SourceVersion: pulumi.String(env.Name),
 				Tags:          tags,
 			})
 			if err != nil {
-				return fmt.Errorf("creating codebuild project [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating codebuild project [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = codepipeline.NewPipeline(ctx, fmt.Sprintf("code-pipeline-%s-%s", rsbService, env.Name), &codepipeline.PipelineArgs{
+			_, err = codepipeline.NewPipeline(ctx, fmt.Sprintf("code-pipeline-%s-%s", rsbService.Name, env.Name), &codepipeline.PipelineArgs{
 				ArtifactStore: codepipeline.PipelineArtifactStoreArgs{
 					Location: bucketArtifacts.Bucket,
 					Type:     pulumi.String("S3"),
 				},
-				Name:    pulumi.Sprintf("%s@%s", rsbService, env.Name),
+				Name:    pulumi.Sprintf("%s@%s", rsbService.Name, env.Name),
 				RoleArn: roleCodepipeline.Arn,
 				Stages: codepipeline.PipelineStageArray{
 					// Stage 1: Checkout sourcecode
@@ -1098,7 +1099,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 								},
 								Configuration: pulumi.StringMap{
 									"Owner":                pulumi.String(cred.GithubOrgName),
-									"Repo":                 pulumi.String(rsbService),
+									"Repo":                 pulumi.String(rsbService.Name),
 									"PollForSourceChanges": pulumi.String("true"),
 									"Branch":               pulumi.String(env.Name),
 									"OAuthToken":           pulumi.String(cred.GithubAuthToken),
@@ -1119,7 +1120,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 								Provider: pulumi.String("CodeBuild"),
 								Version:  pulumi.String("1"),
 								Configuration: pulumi.StringMap{
-									"ProjectName": pulumi.Sprintf("%s_%s", env.Name, rsbService),
+									"ProjectName": pulumi.Sprintf("%s_%s", env.Name, rsbService.Name),
 								},
 								InputArtifacts: pulumi.StringArray{
 									pulumi.String("source"),
@@ -1144,7 +1145,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 								Version:  pulumi.String("1"),
 								Configuration: pulumi.StringMap{
 									"ClusterName": pulumi.String(env.Name),
-									"ServiceName": pulumi.String(rsbService),
+									"ServiceName": pulumi.String(rsbService.Name),
 								},
 								InputArtifacts: pulumi.StringArray{
 									pulumi.String("imagedefinitions"),
@@ -1158,12 +1159,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Tags: tags,
 			})
 			if err != nil {
-				return fmt.Errorf("creating code pipeline [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating code pipeline [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = ecs.NewService(ctx, fmt.Sprintf("ecs-service-%s-%s", rsbService, env.Name), &ecs.ServiceArgs{
+			_, err = ecs.NewService(ctx, fmt.Sprintf("ecs-service-%s-%s", rsbService.Name, env.Name), &ecs.ServiceArgs{
 				Cluster:        cluster.ID(),
-				Name:           pulumi.String(rsbService),
+				Name:           pulumi.String(rsbService.Name),
 				LaunchType:     pulumi.String("FARGATE"),
 				TaskDefinition: taskDef.Arn,
 				DesiredCount:   pulumi.Int(1),
@@ -1182,7 +1183,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Tags: tags,
 			})
 			if err != nil {
-				return fmt.Errorf("creating ecs service [%s]: %w", rsbService, err)
+				return fmt.Errorf("creating ecs service [%s]: %w", rsbService.Name, err)
 			}
 		}
 

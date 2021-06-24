@@ -6,18 +6,17 @@ import (
 )
 
 type environment struct {
-	Name                   string   `json:"name" binding:"required"`
-	Domain                 string   `json:"domain"`
-	DNSZoneID              string   `json:"dns_zone_id"`
-	SlackWebHook           string   `json:"slack_webhook"`
-	EcsVolumeSize          int      `json:"ecs_volume_size"`
-	EcsCPU                 int      `json:"ecs_cpu"`
-	EcsMemory              int      `json:"ecs_memory"`
-	SourceBranch           string   `json:"source_branch"`
-	BastionAMIID           string   `json:"bastion_ami_id"`
-	BrokerDriver           string   `json:"broker_driver"`
-	ServicesCORSOriginURLs string   `json:"services_cors_origin_urls"`
-	RsbServices            []string `json:"rsb_services"`
+	Name                   string       `json:"name" binding:"required"`
+	Domain                 string       `json:"domain"`
+	DNSZoneID              string       `json:"dns_zone_id"`
+	SlackWebHook           string       `json:"slack_webhook"`
+	EcsVolumeSize          int          `json:"ecs_volume_size"`
+	EcsCPU                 int          `json:"ecs_cpu"`
+	EcsMemory              int          `json:"ecs_memory"`
+	BastionAMIID           string       `json:"bastion_ami_id"`
+	BrokerDriver           string       `json:"broker_driver"`
+	ServicesCORSOriginURLs string       `json:"services_cors_origin_urls"`
+	RsbServices            []RsbService `json:"rsb_services"`
 }
 
 func (e environment) Validate() error {
@@ -49,10 +48,6 @@ func (e *environment) SetDefaults(cfg config) {
 		e.EcsMemory = 512
 	}
 
-	if e.SourceBranch == "" {
-		e.SourceBranch = "develop"
-	}
-
 	if e.BastionAMIID == "" {
 		e.BastionAMIID = "ami-08bac620dc84221eb"
 	}
@@ -66,12 +61,33 @@ func (e *environment) SetDefaults(cfg config) {
 	}
 
 	if len(e.RsbServices) == 0 {
-		e.RsbServices = []string{
-			"rsb-service-feeder",
-			"rsb-service-worker",
-			"rsb-service-ventureconfig",
-			"rsb-service-servicerepository",
-			"rsb-service-users",
+		e.RsbServices = []RsbService{
+			{
+				Name:         "rsb-service-feeder",
+				SourceBranch: "develop",
+			},
+			{
+				Name:         "rsb-service-worker",
+				SourceBranch: "develop",
+			},
+			{
+				Name:         "rsb-service-ventureconfig",
+				SourceBranch: "develop",
+			},
+			{
+				Name:         "rsb-service-servicerepository",
+				SourceBranch: "develop",
+			},
+			{
+				Name:         "rsb-service-users",
+				SourceBranch: "develop",
+			},
+		}
+	} else {
+		for i, rsbService := range e.RsbServices {
+			if rsbService.SourceBranch == "" {
+				e.RsbServices[i].SourceBranch = "develop"
+			}
 		}
 	}
 }

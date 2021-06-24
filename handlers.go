@@ -50,6 +50,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
 		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout))
@@ -97,6 +98,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
 		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		outs, err := s.Outputs(ctx)
@@ -151,6 +153,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
 		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		res, err := s.Up(ctx /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
@@ -202,6 +205,7 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
 		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		if _, err = s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout)); err != nil {
