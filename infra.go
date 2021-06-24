@@ -1000,7 +1000,31 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating task definition [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = codebuild.NewProject(ctx, fmt.Sprintf("cb-project-%s-%s", rsbService.Name, env.Name), &codebuild.ProjectArgs{
+			ecsService, err := ecs.NewService(ctx, fmt.Sprintf("ecs-service-%s-%s", rsbService.Name, env.Name), &ecs.ServiceArgs{
+				Cluster:        cluster.ID(),
+				Name:           pulumi.String(rsbService.Name),
+				LaunchType:     pulumi.String("FARGATE"),
+				TaskDefinition: taskDef.Arn,
+				DesiredCount:   pulumi.Int(1),
+				LoadBalancers:  serviceLoadBalancers,
+				NetworkConfiguration: ecs.ServiceNetworkConfigurationArgs{
+					Subnets: pulumi.StringArray{
+						subnetGroups[_subnetGroupDatabase][0].ID(),
+						subnetGroups[_subnetGroupDatabase][1].ID(),
+						subnetGroups[_subnetGroupDatabase][2].ID(),
+					},
+					SecurityGroups: pulumi.StringArray{
+						sg.ID(),
+					},
+					AssignPublicIp: pulumi.Bool(false),
+				},
+				Tags: tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating ecs service [%s]: %w", rsbService.Name, err)
+			}
+
+			cb, err := codebuild.NewProject(ctx, fmt.Sprintf("cb-project-%s-%s", rsbService.Name, env.Name), &codebuild.ProjectArgs{
 				Artifacts: codebuild.ProjectArtifactsArgs{
 					Type: pulumi.String("NO_ARTIFACTS"),
 				},
@@ -1161,33 +1185,9 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					},
 				},
 				Tags: tags,
-			})
+			}, pulumi.DependsOn([]pulumi.Resource{ecsService, cb}))
 			if err != nil {
 				return fmt.Errorf("creating code pipeline [%s]: %w", rsbService.Name, err)
-			}
-
-			_, err = ecs.NewService(ctx, fmt.Sprintf("ecs-service-%s-%s", rsbService.Name, env.Name), &ecs.ServiceArgs{
-				Cluster:        cluster.ID(),
-				Name:           pulumi.String(rsbService.Name),
-				LaunchType:     pulumi.String("FARGATE"),
-				TaskDefinition: taskDef.Arn,
-				DesiredCount:   pulumi.Int(1),
-				LoadBalancers:  serviceLoadBalancers,
-				NetworkConfiguration: ecs.ServiceNetworkConfigurationArgs{
-					Subnets: pulumi.StringArray{
-						subnetGroups[_subnetGroupDatabase][0].ID(),
-						subnetGroups[_subnetGroupDatabase][1].ID(),
-						subnetGroups[_subnetGroupDatabase][2].ID(),
-					},
-					SecurityGroups: pulumi.StringArray{
-						sg.ID(),
-					},
-					AssignPublicIp: pulumi.Bool(false),
-				},
-				Tags: tags,
-			})
-			if err != nil {
-				return fmt.Errorf("creating ecs service [%s]: %w", rsbService.Name, err)
 			}
 		}
 
