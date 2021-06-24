@@ -285,7 +285,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Request certificate validation for services
-		_, err = acm.NewCertificateValidation(ctx, "cert-services-validation-"+env.Name, &acm.CertificateValidationArgs{
+		certValidationServicesWildcard, err := acm.NewCertificateValidation(ctx, "cert-services-validation-"+env.Name, &acm.CertificateValidationArgs{
 			CertificateArn: certServices.Arn,
 			ValidationRecordFqdns: pulumi.StringArray{
 				recordCertServices.Fqdn,
@@ -659,7 +659,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			LoadBalancerArn: lbMain.Arn,
 			Protocol:        pulumi.String("HTTPS"),
 			Port:            pulumi.Int(443),
-			CertificateArn:  certValidationWildcard.CertificateArn,
+			CertificateArn:  certValidationServicesWildcard.CertificateArn,
 			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArray{
 				elasticloadbalancingv2.ListenerDefaultActionArgs{
 					Type:           pulumi.String("forward"),
@@ -841,7 +841,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					LoadBalancerArn: nlb.Arn,
 					Protocol:        pulumi.String("TLS"),
 					Port:            pulumi.Int(443),
-					CertificateArn:  certValidationWildcard.CertificateArn,
+					CertificateArn:  certValidationServicesWildcard.CertificateArn,
 					DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArray{
 						elasticloadbalancingv2.ListenerDefaultActionArgs{
 							Type:           pulumi.String("forward"),
