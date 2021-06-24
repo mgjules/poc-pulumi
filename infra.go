@@ -387,7 +387,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Public A record for bastion instance
-		_, err = route53.NewRecord(ctx, "record-pub-bastion"+env.Name, &route53.RecordArgs{
+		bastionPubRecord, err := route53.NewRecord(ctx, "record-pub-bastion"+env.Name, &route53.RecordArgs{
 			Name: pulumi.Sprintf("bastion.%s.%s", env.Name, env.Domain),
 			Type: route53.RecordTypeA,
 			Records: pulumi.StringArray{
@@ -401,7 +401,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Private A record for bastion instance
-		_, err = route53.NewRecord(ctx, "record-priv-bastion"+env.Name, &route53.RecordArgs{
+		bastionPrivRecord, err := route53.NewRecord(ctx, "record-priv-bastion"+env.Name, &route53.RecordArgs{
 			Name: pulumi.Sprintf("srv.%s.%s", env.Name, env.Domain),
 			Type: route53.RecordTypeA,
 			Records: pulumi.StringArray{
@@ -670,6 +670,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		vpcLinks := make(map[string]*apigateway.VpcLink)
+		serviceRecords := make(map[string]pulumi.Input)
 		for _, rsbService := range env.RsbServices {
 			repo, err := ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService.Name, env.Name), &ecr.RepositoryArgs{
 				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService.Name),
@@ -773,7 +774,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("creating elb https listener rule [%s]: %w", rsbService.Name, err)
 			}
 
-			_, err = route53.NewRecord(ctx, fmt.Sprintf("record-https-%s-%s", rsbService.Name, env.Name), &route53.RecordArgs{
+			serviceRecord, err := route53.NewRecord(ctx, fmt.Sprintf("record-https-%s-%s", rsbService.Name, env.Name), &route53.RecordArgs{
 				Name: pulumi.Sprintf("%s.services.%s.%s.", shortName(rsbService.Name), env.Name, env.Domain),
 				Type: route53.RecordTypeCNAME,
 				Records: pulumi.StringArray{
@@ -785,6 +786,8 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			if err != nil {
 				return fmt.Errorf("creating record [%s]: %w", rsbService.Name, err)
 			}
+
+			serviceRecords[rsbService.Name] = serviceRecord.Fqdn
 
 			if _apiGWServices[rsbService.Name] {
 				nlb, err := elasticloadbalancingv2.NewLoadBalancer(ctx, fmt.Sprintf("lb-network-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.LoadBalancerArgs{
@@ -871,6 +874,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				rsbService.Name,
 				dbMasterUserPassword,
 				rmqMasterUserPassword,
+				bastionPrivRecord.Fqdn,
 			).ApplyT(func(args []interface{}) (string, error) {
 				rsbServiceName := args[4].(string)
 
@@ -910,10 +914,11 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				apigwID := args[3].(string)
 				dbMasterUserPassword := args[5].(string)
 				rmqMasterUserPassword := args[6].(string)
+				bastionPrivURL := args[7].(string)
 
 				mappings := map[string]string{
 					"REPLACEME_RSBServicesCORSOriginURLs":       fmt.Sprintf("%s,https://admin-ui.services.%s.%s", env.ServicesCORSOriginURLs, env.Name, env.Domain),
-					"REPLACEME_BASTION_HOST":                    fmt.Sprintf("srv.%s.%s", env.Name, env.Domain),
+					"REPLACEME_BASTION_HOST":                    bastionPrivURL,
 					"REPLACEME_AWS_API_GW_ID":                   apigwID,
 					"REPLACEME_RSB_API_BASE_URL":                fmt.Sprintf("https://%s.execute-api.eu-west-1.amazonaws.com/v1", apigwID),
 					"REPLACEME_SERVICE_REGISTRY_BASE_URL":       fmt.Sprintf("https://servicerepository.services.%s.%s", env.Name, env.Domain),
@@ -926,7 +931,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					"REPLACEME_RMQMasterUsername":     "admin",
 					"REPLACEME_RMQMasterUserPassword": rmqMasterUserPassword,
 					// "REPLACEME_RMQVHost":                         env.RMQVHost,
-					"REPLACEME_RMQServer": fmt.Sprintf("srv.%s.%s", env.Name, env.Domain),
+					"REPLACEME_RMQServer": bastionPrivURL,
 					// "REPLACEME_DBMasterUsername":                 env.DBMasterUsername,
 					"REPLACEME_DBMasterUserPassword": dbMasterUserPassword,
 					"REPLACEME_AwsAccessKeyID":       cred.AWSAccessKeyID,
@@ -952,7 +957,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					"REPLACEME_MESSAGE_BROKER_DRIVER": env.BrokerDriver,
 					"REPLACEME_MqAMQPPort":            "5672",
 					"REPLACEME_MqRabbitAdminPort":     "15672",
-					"REPLACEME_RMQAdminURL":           fmt.Sprintf("http://srv.%s.%s:15672", env.Name, env.Domain),
+					"REPLACEME_RMQAdminURL":           fmt.Sprintf("http://%s:15672", bastionPrivURL),
 					"REPLACEME_MqProtocol":            "amqp",
 				}
 
@@ -1060,6 +1065,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						pulumi.String("LOCAL_SOURCE_CACHE"),
 						pulumi.String("LOCAL_DOCKER_LAYER_CACHE"),
 					},
+					Type: pulumi.String("LOCAL"),
 				},
 				ServiceRole: roleBuildpipeline.Arn,
 				Source: &codebuild.ProjectSourceArgs{
@@ -1228,7 +1234,15 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rest api gw stage: %w", err)
 		}
 
-		ctx.Export("vpc", vpc.Arn)
+		ctx.Export("result", pulumi.Map(map[string]pulumi.Input{
+			"name":               pulumi.String(env.Name),
+			"db_password":        dbMasterUserPassword,
+			"rmq_server":         bastionPrivRecord.Fqdn,
+			"rmq_admin_ui":       pulumi.Sprintf("%s:15672", bastionPubRecord.Fqdn),
+			"rmq_admin_password": rmqMasterUserPassword,
+			"services_routes":    pulumi.Map(serviceRecords),
+		}))
+
 		return nil
 	}
 }

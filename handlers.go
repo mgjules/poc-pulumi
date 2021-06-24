@@ -60,8 +60,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		}
 
 		c.JSON(http.StatusCreated, gin.H{
-			"name": envName,
-			"vpc":  res.Outputs["vpc"].Value,
+			"result": res.Outputs["result"].Value,
 		})
 	}
 }
@@ -108,8 +107,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"name": envName,
-			"vpc":  outs["vpc"].Value,
+			"result": outs["result"].Value,
 		})
 	}
 }
@@ -168,8 +166,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"name": envName,
-			"vpc":  res.Outputs["vpc"].Value,
+			"result": res.Outputs["result"].Value,
 		})
 	}
 }
@@ -219,7 +216,7 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"msg": fmt.Sprintf("environment %q deleted", envName),
+			"result": fmt.Sprintf("environment %q deleted", envName),
 		})
 	}
 }
