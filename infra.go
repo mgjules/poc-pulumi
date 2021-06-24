@@ -80,8 +80,6 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating resource group: %w", err)
 		}
 
-		// TODO: might need to create a s3 backup bucket (see miscUp)
-
 		// VPC
 		vpc, err := ec2.NewVpc(ctx, "vpc-"+env.Name, &ec2.VpcArgs{
 			CidrBlock:                    pulumi.String("10.15.96.0/19"),
