@@ -242,6 +242,7 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 		result := outs["result"].Value.(map[string]interface{})
 		slackWebHook := result["slack_webhook"].(string)
+		domain := result["domain"].(string)
 
 		go func() {
 			start := time.Now()
@@ -260,7 +261,7 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				return
 			}
 
-			msg := fmt.Sprintf("Deleted environment %q in %s", envName, time.Since(start))
+			msg := fmt.Sprintf("Deleted environment %q on Domain %q in %s", envName, domain, time.Since(start))
 			log.Infof(msg)
 			sendToSlackWebHook([]byte(msg), slackWebHook)
 		}()
