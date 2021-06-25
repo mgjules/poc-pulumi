@@ -168,7 +168,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 	}
 }
 
-func dryRunEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
+func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
 		credentials

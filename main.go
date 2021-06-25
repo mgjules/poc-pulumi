@@ -45,7 +45,7 @@ func run() error {
 		api.POST("/environments", createEnvironment(cfg, project, auto.WorkDir(".")))
 		api.GET("/environments", listEnvironment(cfg, project, auto.WorkDir(".")))
 		api.GET("/environments/:name", getEnvironment(cfg, project, auto.WorkDir(".")))
-		api.POST("/environments/dry-run/:name", dryRunEnvironment(cfg, project, auto.WorkDir(".")))
+		api.POST("/environments/preview/:name", previewEnvironment(cfg, project, auto.WorkDir(".")))
 		api.POST("/environments/refresh/:name", refreshEnvironment(cfg, project, auto.WorkDir(".")))
 		api.PUT("/environments/:name", updateEnvironment(cfg, project, auto.WorkDir(".")))
 		api.DELETE("/environments/:name", deleteEnvironment(cfg, project, auto.WorkDir(".")))
