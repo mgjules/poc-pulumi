@@ -28,20 +28,20 @@ func sendToSlackWebHook(message []byte, hookURL string) error {
 	m["text"] = string(message)
 	data, err := json.Marshal(m)
 	if err != nil {
-		log.Errorf("marshal text for slack: %w", err)
+		log.Errorf("marshal text for slack: %v", err)
 		return fmt.Errorf("marshal text for slack: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", hookURL, bytes.NewBuffer(data))
 	if err != nil {
-		log.Errorf("create http request: %w", err)
+		log.Errorf("create http request: %v", err)
 		return err
 	}
 
 	req.Header.Set("Content-type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Errorf("send request to slack: %w", err)
+		log.Errorf("send request to slack: %v", err)
 		return err
 	}
 	defer resp.Body.Close()
