@@ -77,7 +77,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			sendToSlackWebHook([]byte(createOverview(result)), req.SlackWebHook)
 		}()
 
-		c.JSON(http.StatusCreated, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"result": fmt.Sprintf("environment %q is being created", envName),
 		})
 	}
@@ -249,7 +249,7 @@ func dryRunEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			sendToSlackWebHook([]byte(msg), slackWebHook)
 		}()
 
-		c.JSON(http.StatusCreated, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"result": fmt.Sprintf("environment %q is being previewed", envName),
 		})
 	}
@@ -399,7 +399,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			sendToSlackWebHook([]byte(msg), req.SlackWebHook)
 		}()
 
-		c.JSON(http.StatusCreated, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"result": fmt.Sprintf("environment %q is being updated", envName),
 		})
 	}
