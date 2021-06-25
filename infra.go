@@ -329,22 +329,26 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating cert validation for wildcard: %w", err)
 		}
 
-		dbMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-db-master-user-password-"+env.Name, &random.RandomPasswordArgs{
-			Length:  pulumi.Int(32),
-			Lower:   pulumi.Bool(true),
-			Upper:   pulumi.Bool(true),
-			Special: pulumi.Bool(false),
-		})
-		if err != nil {
-			return fmt.Errorf("creating db master user password: %w", err)
-		}
+		var dbMasterUserPassword pulumi.StringInput
+		if env.AwsServices.RDS.Enabled {
+			if env.AwsServices.RDS.Password == "" {
+				dbMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-db-master-user-password-"+env.Name, &random.RandomPasswordArgs{
+					Length:  pulumi.Int(32),
+					Lower:   pulumi.Bool(true),
+					Upper:   pulumi.Bool(true),
+					Special: pulumi.Bool(false),
+				})
+				if err != nil {
+					return fmt.Errorf("creating db master user password: %w", err)
+				}
 
-		dbMasterUserPassword := dbMasterUserPasswordGenerated.Result.ApplyT(func(result string) string {
-			if env.AwsServices.RDS.Password != "" {
-				return env.AwsServices.RDS.Password
+				dbMasterUserPassword = dbMasterUserPasswordGenerated.Result
+			} else {
+				dbMasterUserPassword = pulumi.String(env.AwsServices.RDS.Password)
 			}
-			return result
-		}).(pulumi.StringOutput)
+		} else {
+			dbMasterUserPassword = pulumi.String("")
+		}
 
 		rmqMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-rmq-master-user-password-"+env.Name, &random.RandomPasswordArgs{
 			Length:  pulumi.Int(32),
@@ -716,8 +720,8 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating elb https listener: %w", err)
 		}
 
-		vpcLinks := make(map[string]*apigateway.VpcLink)
-		serviceRecords := make(map[string]pulumi.Input)
+		vpcLinkIDs := make(pulumi.StringMap)
+		serviceRecords := make(pulumi.StringMap)
 		for _, rsbService := range env.RsbServices.Services {
 			repo, err := ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService.Name, env.Name), &ecr.RepositoryArgs{
 				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService.Name),
@@ -910,7 +914,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					return fmt.Errorf("creating vpc link [%s]: %w", rsbService.Name, err)
 				}
 
-				vpcLinks[rsbService.Name] = vpcLink
+				vpcLinkIDs[rsbService.Name] = vpcLink.ID()
 			}
 
 			containerDefinitions := pulumi.All(
@@ -1276,7 +1280,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Type:                  pulumi.String("HTTP"),
 			PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
 			ConnectionType:        pulumi.String("VPC_LINK"),
-			ConnectionId:          vpcLinks["rsb-service-feeder"].ID(),
+			ConnectionId:          vpcLinkIDs["rsb-service-feeder"],
 			RequestParameters: pulumi.StringMap{
 				"integration.request.header.x-api-key": pulumi.String("method.request.header.x-api-key"),
 			},
@@ -1294,7 +1298,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Type:                  pulumi.String("HTTP"),
 			PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
 			ConnectionType:        pulumi.String("VPC_LINK"),
-			ConnectionId:          vpcLinks["rsb-service-users"].ID(),
+			ConnectionId:          vpcLinkIDs["rsb-service-users"],
 			Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.AwsServices.Route53.Domain),
 		})
 		if err != nil {
@@ -1311,17 +1315,23 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating rest api gw stage: %w", err)
 		}
 
-		ctx.Export("result", pulumi.Map(map[string]pulumi.Input{
+		result := pulumi.Map{
 			"name":                  pulumi.String(env.Name),
 			"broker_server":         bastionPrivRecord.Fqdn,
 			"broker_admin_ui":       pulumi.Sprintf("%s:%d", bastionPubRecord.Fqdn, env.RsbServices.Broker.AdminPort),
 			"broker_username":       pulumi.String(env.RsbServices.Broker.Username),
 			"broker_admin_password": rmqMasterUserPassword,
-			"services_routes":       pulumi.Map(serviceRecords),
+			"services_routes":       serviceRecords,
 			"slack_webhook":         pulumi.String(env.SlackWebHook),
 			"loadbalancer":          lbMain.DnsName,
 			"domain":                pulumi.String(env.AwsServices.Route53.Domain),
-		}))
+		}
+
+		if env.AwsServices.RDS.Enabled {
+			result["db_password"] = dbMasterUserPassword
+		}
+
+		ctx.Export("result", result)
 
 		return nil
 	}
