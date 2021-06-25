@@ -6,17 +6,19 @@ import (
 )
 
 type environment struct {
-	Name                   string       `json:"name" binding:"required"`
-	Domain                 string       `json:"domain"`
-	DNSZoneID              string       `json:"dns_zone_id"`
-	SlackWebHook           string       `json:"slack_webhook"`
-	EcsVolumeSize          int          `json:"ecs_volume_size"`
-	EcsCPU                 int          `json:"ecs_cpu"`
-	EcsMemory              int          `json:"ecs_memory"`
-	BastionAMIID           string       `json:"bastion_ami_id"`
-	BrokerDriver           string       `json:"broker_driver"`
-	ServicesCORSOriginURLs string       `json:"services_cors_origin_urls"`
-	RsbServices            []RsbService `json:"rsb_services"`
+	Name                   string             `json:"name" binding:"required"`
+	Domain                 string             `json:"domain"`
+	DNSZoneID              string             `json:"dns_zone_id"`
+	SlackWebHook           string             `json:"slack_webhook"`
+	EcsVolumeSize          int                `json:"ecs_volume_size"`
+	EcsCPU                 int                `json:"ecs_cpu"`
+	EcsMemory              int                `json:"ecs_memory"`
+	BastionAMIID           string             `json:"bastion_ami_id"`
+	BrokerDriver           string             `json:"broker_driver"`
+	ServicesCORSOriginURLs string             `json:"services_cors_origin_urls"`
+	RsbServices            []RsbService       `json:"rsb_services"`
+	AdditionalAwsServices  AwsServices        `json:"additional_aws_services"`
+	ThirdPartyServices     ThirdPartyServices `json:"third_party_services"`
 }
 
 func (e environment) Validate() error {

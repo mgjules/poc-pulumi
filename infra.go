@@ -441,6 +441,11 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			return fmt.Errorf("creating elastic subnet group: %w", err)
 		}
 
+		// Elastic search
+		if env.AdditionalAwsServices.ElasticSearch.Enabled {
+			// TODO: implement
+		}
+
 		// Elastic cache cluster
 		elc, err := elasticache.NewCluster(ctx, "elc-cluster-"+env.Name, &elasticache.ClusterArgs{
 			ClusterId:         pulumi.String(env.Name),
@@ -685,7 +690,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				SourceSha:    pulumi.String(rsbService.SourceCommit),
 				Branch:       pulumi.String(env.Name),
 				Repository:   pulumi.String(rsbService.Name),
-			})
+			}, pulumi.DeleteBeforeReplace(true))
 			if err != nil {
 				return fmt.Errorf("creating branch [%s]: %w", rsbService.Name, err)
 			}
@@ -950,15 +955,16 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					"REPLACEME_VENTURE_CONFIG_SERVICE_CACHE_TAG": fmt.Sprintf("rsb_vc_%s", env.Name),
 					"REPLACEME_BACKUP_INTERVAL":                  "5",
 					"REPLACEME_RSB_ENV":                          env.Name,
-					// "REPLACEME_DATADOG_API_BASE_URL":             env.DDApiBaseURL,
-					// "REPLACEME_DATADOG_API_KEY":                  env.DDApiKey,
-					// "REPLACEME_DATADOG_APP_KEY":                  env.DDAppKey,
-					"REPLACEME_RELEASE_NAME":          env.Name,
-					"REPLACEME_MESSAGE_BROKER_DRIVER": env.BrokerDriver,
-					"REPLACEME_MqAMQPPort":            "5672",
-					"REPLACEME_MqRabbitAdminPort":     "15672",
-					"REPLACEME_RMQAdminURL":           fmt.Sprintf("http://%s:15672", bastionPrivURL),
-					"REPLACEME_MqProtocol":            "amqp",
+					"REPLACEME_DATADOG_ENABLED":                  fmt.Sprintf("%t", env.ThirdPartyServices.DataDog.Enabled),
+					"REPLACEME_DATADOG_API_BASE_URL":             env.ThirdPartyServices.DataDog.ApiBaseURL,
+					"REPLACEME_DATADOG_API_KEY":                  env.ThirdPartyServices.DataDog.ApiKey,
+					"REPLACEME_DATADOG_APP_KEY":                  env.ThirdPartyServices.DataDog.AppKey,
+					"REPLACEME_RELEASE_NAME":                     env.Name,
+					"REPLACEME_MESSAGE_BROKER_DRIVER":            env.BrokerDriver,
+					"REPLACEME_MqAMQPPort":                       "5672",
+					"REPLACEME_MqRabbitAdminPort":                "15672",
+					"REPLACEME_RMQAdminURL":                      fmt.Sprintf("http://%s:15672", bastionPrivURL),
+					"REPLACEME_MqProtocol":                       "amqp",
 				}
 
 				environments, ok := containerDefinitions.Definitions[0]["environment"].([]interface{})
