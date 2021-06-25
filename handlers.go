@@ -62,6 +62,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			res, err := s.Up(context.Background(), optup.ProgressStreams(os.Stdout))
 			if err != nil {
 				// c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+				log.Errorf("create env %q: %v", envName, err)
 				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while creating environment %q", envName)), req.SlackWebHook)
 				return
 			}
@@ -181,6 +182,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				}
 
 				// c.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
+				log.Errorf("create env %q: %v", envName, err)
 				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while updating environment %q", envName)), req.SlackWebHook)
 				return
 			}
