@@ -43,6 +43,7 @@ func run() error {
 	api := router.Group("/api")
 	{
 		api.POST("/environments", createEnvironment(cfg, project, auto.WorkDir(".")))
+		api.GET("/environments", listEnvironment(cfg, project, auto.WorkDir(".")))
 		api.GET("/environments/:name", getEnvironment(cfg, project, auto.WorkDir(".")))
 		api.PUT("/environments/:name", updateEnvironment(cfg, project, auto.WorkDir(".")))
 		api.DELETE("/environments/:name", deleteEnvironment(cfg, project, auto.WorkDir(".")))

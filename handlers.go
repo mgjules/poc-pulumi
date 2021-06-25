@@ -81,6 +81,44 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 	}
 }
 
+func listEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
+	type request struct {
+		credentials
+	}
+
+	return func(c *gin.Context) {
+		var req request
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			return
+		}
+
+		req.credentials.SetDefaults(cfg)
+
+		ctx := c.Request.Context()
+
+		ws, err := auto.NewLocalWorkspace(ctx, opts...)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			return
+		}
+
+		_ = ws.SetConfig(ctx, "", "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
+		_ = ws.SetConfig(ctx, "", "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
+		_ = ws.SetConfig(ctx, "", "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+
+		stacks, err := ws.ListStacks(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"result": stacks,
+		})
+	}
+}
+
 func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		credentials
