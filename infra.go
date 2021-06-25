@@ -260,7 +260,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		// Certificate for services
 		certServices, err := acm.NewCertificate(ctx, "cert-services-"+env.Name, &acm.CertificateArgs{
-			DomainName:       pulumi.Sprintf("*.services.%s.%s", env.Name, env.Domain),
+			DomainName:       pulumi.Sprintf("*.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 			ValidationMethod: pulumi.String("DNS"),
 			Tags:             tags,
 		})
@@ -275,7 +275,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Records: pulumi.StringArray{
 				certServices.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordValue().Elem(),
 			},
-			ZoneId: pulumi.String(env.DNSZoneID),
+			ZoneId: pulumi.String(env.AwsServices.Route53.DNSZoneID),
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Parent(certServices))
 		if err != nil {
@@ -295,7 +295,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		// Certificate for wildcard
 		certWildcard, err := acm.NewCertificate(ctx, "cert-wildcard-"+env.Name, &acm.CertificateArgs{
-			DomainName:       pulumi.Sprintf("*.%s.%s", env.Name, env.Domain),
+			DomainName:       pulumi.Sprintf("*.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 			ValidationMethod: pulumi.String("DNS"),
 			Tags:             tags,
 		})
@@ -310,7 +310,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Records: pulumi.StringArray{
 				certWildcard.DomainValidationOptions.Index(pulumi.Int(0)).ResourceRecordValue().Elem(),
 			},
-			ZoneId: pulumi.String(env.DNSZoneID),
+			ZoneId: pulumi.String(env.AwsServices.Route53.DNSZoneID),
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Parent(certWildcard))
 		if err != nil {
@@ -339,8 +339,8 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		dbMasterUserPassword := dbMasterUserPasswordGenerated.Result.ApplyT(func(result string) string {
-			if cred.DBMasterUserPassword != "" {
-				return cred.DBMasterUserPassword
+			if env.AwsServices.RDS.Password != "" {
+				return env.AwsServices.RDS.Password
 			}
 			return result
 		}).(pulumi.StringOutput)
@@ -356,8 +356,8 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		rmqMasterUserPassword := rmqMasterUserPasswordGenerated.Result.ApplyT(func(result string) string {
-			if cred.RMQMasterUserPassword != "" {
-				return cred.RMQMasterUserPassword
+			if env.RsbServices.Broker.Password != "" {
+				return env.RsbServices.Broker.Password
 			}
 			return result
 		}).(pulumi.StringOutput)
@@ -371,7 +371,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		// Bastion instance
 		// NOTE: perpetual diff for EbsBlockDevices so using default with AMI
 		bastion, err := ec2.NewInstance(ctx, "ec2-instance-bastion-"+env.Name, &ec2.InstanceArgs{
-			Ami:             pulumi.String(env.BastionAMIID),
+			Ami:             pulumi.String(env.AwsServices.Bastion.AMIID),
 			InstanceType:    ec2.InstanceType_T3_Micro,
 			SubnetId:        subnetGroups[_subnetGroupPublic][0].ID(),
 			SourceDestCheck: pulumi.Bool(false),
@@ -388,12 +388,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		// Public A record for bastion instance
 		bastionPubRecord, err := route53.NewRecord(ctx, "record-pub-bastion"+env.Name, &route53.RecordArgs{
-			Name: pulumi.Sprintf("bastion.%s.%s", env.Name, env.Domain),
+			Name: pulumi.Sprintf("bastion.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 			Type: route53.RecordTypeA,
 			Records: pulumi.StringArray{
 				bastion.PublicIp,
 			},
-			ZoneId: pulumi.String(env.DNSZoneID),
+			ZoneId: pulumi.String(env.AwsServices.Route53.DNSZoneID),
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Parent(bastion))
 		if err != nil {
@@ -402,12 +402,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		// Private A record for bastion instance
 		bastionPrivRecord, err := route53.NewRecord(ctx, "record-priv-bastion"+env.Name, &route53.RecordArgs{
-			Name: pulumi.Sprintf("srv.%s.%s", env.Name, env.Domain),
+			Name: pulumi.Sprintf("srv.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 			Type: route53.RecordTypeA,
 			Records: pulumi.StringArray{
 				bastion.PrivateIp,
 			},
-			ZoneId: pulumi.String(env.DNSZoneID),
+			ZoneId: pulumi.String(env.AwsServices.Route53.DNSZoneID),
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Parent(bastion))
 		if err != nil {
@@ -442,7 +442,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Elastic search
-		if env.AdditionalAwsServices.ElasticSearch.Enabled {
+		if env.AwsServices.ElasticSearch.Enabled {
 			// TODO: implement
 		}
 
@@ -521,7 +521,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		domainAPIGw, err := apigateway.NewDomainName(ctx, "api-gw-domain-"+env.Name, &apigateway.DomainNameArgs{
-			DomainName: pulumi.Sprintf("bus.%s.%s", env.Name, env.Domain),
+			DomainName: pulumi.Sprintf("bus.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 			EndpointConfiguration: apigateway.DomainNameEndpointConfigurationArgs{
 				Types: pulumi.String("REGIONAL"),
 			},
@@ -538,7 +538,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Records: pulumi.StringArray{
 				domainAPIGw.RegionalDomainName,
 			},
-			ZoneId: pulumi.String(env.DNSZoneID),
+			ZoneId: pulumi.String(env.AwsServices.Route53.DNSZoneID),
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Parent(domainAPIGw))
 		if err != nil {
@@ -676,7 +676,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		vpcLinks := make(map[string]*apigateway.VpcLink)
 		serviceRecords := make(map[string]pulumi.Input)
-		for _, rsbService := range env.RsbServices {
+		for _, rsbService := range env.RsbServices.Services {
 			repo, err := ecr.NewRepository(ctx, fmt.Sprintf("repo-%s-%s", rsbService.Name, env.Name), &ecr.RepositoryArgs{
 				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService.Name),
 				Tags: tags,
@@ -744,7 +744,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					elasticloadbalancingv2.ListenerRuleConditionArgs{
 						HostHeader: elasticloadbalancingv2.ListenerRuleConditionHostHeaderArgs{
 							Values: pulumi.StringArray{
-								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService.Name), env.Name, env.Domain),
+								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService.Name), env.Name, env.AwsServices.Route53.Domain),
 							},
 						},
 					},
@@ -768,7 +768,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					elasticloadbalancingv2.ListenerRuleConditionArgs{
 						HostHeader: elasticloadbalancingv2.ListenerRuleConditionHostHeaderArgs{
 							Values: pulumi.StringArray{
-								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService.Name), env.Name, env.Domain),
+								pulumi.Sprintf("%s.services.%s.%s", shortName(rsbService.Name), env.Name, env.AwsServices.Route53.Domain),
 							},
 						},
 					},
@@ -780,12 +780,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			}
 
 			serviceRecord, err := route53.NewRecord(ctx, fmt.Sprintf("record-https-%s-%s", rsbService.Name, env.Name), &route53.RecordArgs{
-				Name: pulumi.Sprintf("%s.services.%s.%s.", shortName(rsbService.Name), env.Name, env.Domain),
+				Name: pulumi.Sprintf("%s.services.%s.%s.", shortName(rsbService.Name), env.Name, env.AwsServices.Route53.Domain),
 				Type: route53.RecordTypeCNAME,
 				Records: pulumi.StringArray{
 					lbMain.DnsName,
 				},
-				ZoneId: pulumi.String(env.DNSZoneID),
+				ZoneId: pulumi.String(env.AwsServices.Route53.DNSZoneID),
 				Ttl:    pulumi.Int(300),
 			})
 			if err != nil {
@@ -922,49 +922,76 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				bastionPrivURL := args[7].(string)
 
 				mappings := map[string]string{
-					"REPLACEME_RSBServicesCORSOriginURLs":       fmt.Sprintf("%s,https://admin-ui.services.%s.%s", env.ServicesCORSOriginURLs, env.Name, env.Domain),
-					"REPLACEME_BASTION_HOST":                    bastionPrivURL,
-					"REPLACEME_AWS_API_GW_ID":                   apigwID,
+					// Bastion
+					"REPLACEME_BASTION_HOST": bastionPrivURL,
+
+					// Api Gateway
+					"REPLACEME_AWS_API_GW_ID": apigwID,
+
+					// RSB Services base URL
 					"REPLACEME_RSB_API_BASE_URL":                fmt.Sprintf("https://%s.execute-api.eu-west-1.amazonaws.com/v1", apigwID),
-					"REPLACEME_SERVICE_REGISTRY_BASE_URL":       fmt.Sprintf("https://servicerepository.services.%s.%s", env.Name, env.Domain),
-					"REPLACEME_VENTURE_CONFIG_SERVICE_BASE_URL": fmt.Sprintf("https://ventureconfig.services.%s.%s", env.Name, env.Domain),
-					"REPLACEME_FEEDER_URL":                      fmt.Sprintf("https://feeder.services.%s.%s", env.Name, env.Domain),
-					"REPLACEME_USER_SERVICE_BASE_URL":           fmt.Sprintf("https://users.services.%s.%s", env.Name, env.Domain),
+					"REPLACEME_SERVICE_REGISTRY_BASE_URL":       fmt.Sprintf("https://servicerepository.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
+					"REPLACEME_VENTURE_CONFIG_SERVICE_BASE_URL": fmt.Sprintf("https://ventureconfig.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
+					"REPLACEME_FEEDER_URL":                      fmt.Sprintf("https://feeder.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
+					"REPLACEME_USER_SERVICE_BASE_URL":           fmt.Sprintf("https://users.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 					// "REPLACEME_E2EMON_BASE_URL":                  e2eMonBaseUrl(),
-					// "REPLACEME_DB_HOST":                          env.DBHostname,
-					// "REPLACEME_DBHostname":                       env.DBHostname,
-					"REPLACEME_RMQMasterUsername":     "admin",
-					"REPLACEME_RMQMasterUserPassword": rmqMasterUserPassword,
-					// "REPLACEME_RMQVHost":                         env.RMQVHost,
-					"REPLACEME_RMQServer": bastionPrivURL,
-					// "REPLACEME_DBMasterUsername":                 env.DBMasterUsername,
-					"REPLACEME_DBMasterUserPassword": dbMasterUserPassword,
-					"REPLACEME_AwsAccessKeyID":       cred.AWSAccessKeyID,
-					"REPLACEME_AwsRegion":            cred.AWSRegion,
-					"REPLACEME_AwsSecretAccessKey":   cred.AWSSecretAccessKey,
-					"REPLACEME_GithubOrgname":        cred.GithubOrgName,
-					"REPLACEME_GithubOauthToken":     cred.GithubAuthToken,
-					"REPLACEME_DNSZoneID":            env.DNSZoneID,
-					"REPLACEME_Domain":               env.Domain,
-					"REPLACEME_LibDBTable":           fmt.Sprintf("%s_%s", env.Name, svcShortName),
-					"REPLACEME_DB_DATABASE":          fmt.Sprintf("%s_%s", env.Name, svcShortName),
-					"REPLACEME_SLACK_WEBHOOK":        env.SlackWebHook,
-					"REPLACEME_ElasticacheHostname":  *elcHostname,
-					// "REPLACEME_ELASTICSEARCH_URL":                fmt.Sprintf("https://%s", env.ElasticSearchEndpoint),
-					"REPLACEME_SERVICE_REGISTRY_CACHE_TAG":       fmt.Sprintf("rsb_sr_%s", env.Name),
+
+					// RSB Services configs
 					"REPLACEME_VENTURE_CONFIG_SERVICE_CACHE_TAG": fmt.Sprintf("rsb_vc_%s", env.Name),
 					"REPLACEME_BACKUP_INTERVAL":                  "5",
-					"REPLACEME_RSB_ENV":                          env.Name,
-					"REPLACEME_DATADOG_ENABLED":                  fmt.Sprintf("%t", env.ThirdPartyServices.DataDog.Enabled),
-					"REPLACEME_DATADOG_API_BASE_URL":             env.ThirdPartyServices.DataDog.ApiBaseURL,
-					"REPLACEME_DATADOG_API_KEY":                  env.ThirdPartyServices.DataDog.ApiKey,
-					"REPLACEME_DATADOG_APP_KEY":                  env.ThirdPartyServices.DataDog.AppKey,
-					"REPLACEME_RELEASE_NAME":                     env.Name,
-					"REPLACEME_MESSAGE_BROKER_DRIVER":            env.BrokerDriver,
-					"REPLACEME_MqAMQPPort":                       "5672",
-					"REPLACEME_MqRabbitAdminPort":                "15672",
-					"REPLACEME_RMQAdminURL":                      fmt.Sprintf("http://%s:15672", bastionPrivURL),
-					"REPLACEME_MqProtocol":                       "amqp",
+					"REPLACEME_RSBServicesCORSOriginURLs":        fmt.Sprintf("%s,https://admin-ui.services.%s.%s", env.RsbServices.CORSOriginURLs, env.Name, env.AwsServices.Route53.Domain),
+
+					// Message brokers
+					"REPLACEME_MESSAGE_BROKER_DRIVER": env.RsbServices.Broker.Driver,
+					"REPLACEME_RMQServer":             bastionPrivURL,
+					"REPLACEME_RMQMasterUsername":     env.RsbServices.Broker.Username,
+					"REPLACEME_RMQMasterUserPassword": rmqMasterUserPassword,
+					"REPLACEME_RMQAdminURL":           fmt.Sprintf("http://%s:%d", bastionPrivURL, env.RsbServices.Broker.AdminPort),
+					// "REPLACEME_RMQVHost":                         env.RMQVHost,
+					"REPLACEME_MqAMQPPort":        strconv.Itoa(env.RsbServices.Broker.Port),
+					"REPLACEME_MqRabbitAdminPort": strconv.Itoa(env.RsbServices.Broker.AdminPort),
+					"REPLACEME_MqProtocol":        "amqp",
+
+					// Databases
+					// "REPLACEME_DB_HOST":                          env.DBHostname,
+					// "REPLACEME_DBHostname":                       env.DBHostname,
+					"REPLACEME_DBMasterUsername":     env.AwsServices.RDS.Username,
+					"REPLACEME_DBMasterUserPassword": dbMasterUserPassword,
+					"REPLACEME_DB_DATABASE":          fmt.Sprintf("%s_%s", env.Name, svcShortName),
+					"REPLACEME_LibDBTable":           fmt.Sprintf("%s_%s", env.Name, svcShortName),
+
+					// AWS credentials
+					"REPLACEME_AwsAccessKeyID":     cred.AWSAccessKeyID,
+					"REPLACEME_AwsSecretAccessKey": cred.AWSSecretAccessKey,
+					"REPLACEME_AwsRegion":          cred.AWSRegion,
+
+					// Github credentials
+					"REPLACEME_GithubOrgname":    cred.GithubOrgName,
+					"REPLACEME_GithubOauthToken": cred.GithubAuthToken,
+
+					// Route 53
+					"REPLACEME_DNSZoneID": env.AwsServices.Route53.DNSZoneID,
+					"REPLACEME_Domain":    env.AwsServices.Route53.Domain,
+
+					// Slack
+					"REPLACEME_SLACK_WEBHOOK": env.SlackWebHook,
+
+					// Elastic Cache
+					"REPLACEME_ElasticacheHostname": *elcHostname,
+
+					// Elastic Search
+					// "REPLACEME_ELASTICSEARCH_URL":                fmt.Sprintf("https://%s", env.ElasticSearchEndpoint),
+					"REPLACEME_SERVICE_REGISTRY_CACHE_TAG": fmt.Sprintf("rsb_sr_%s", env.Name),
+
+					// Datadog
+					"REPLACEME_DATADOG_ENABLED":      fmt.Sprintf("%t", env.ThirdPartyServices.DataDog.Enabled),
+					"REPLACEME_DATADOG_API_BASE_URL": env.ThirdPartyServices.DataDog.ApiBaseURL,
+					"REPLACEME_DATADOG_API_KEY":      env.ThirdPartyServices.DataDog.ApiKey,
+					"REPLACEME_DATADOG_APP_KEY":      env.ThirdPartyServices.DataDog.AppKey,
+
+					// Misc
+					"REPLACEME_RSB_ENV":      env.Name,
+					"REPLACEME_RELEASE_NAME": env.Name,
 				}
 
 				environments, ok := containerDefinitions.Definitions[0]["environment"].([]interface{})
@@ -995,8 +1022,8 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Family:               pulumi.Sprintf("%s-%s", env.Name, rsbService.Name),
 				ExecutionRoleArn:     roleExecution.Arn,
 				NetworkMode:          pulumi.String("awsvpc"),
-				Cpu:                  pulumi.String(strconv.Itoa(env.EcsCPU)),
-				Memory:               pulumi.String(strconv.Itoa(env.EcsMemory)),
+				Cpu:                  pulumi.String(strconv.Itoa(env.AwsServices.ECS.CPU)),
+				Memory:               pulumi.String(strconv.Itoa(env.AwsServices.ECS.Memory)),
 				RequiresCompatibilities: pulumi.StringArray{
 					pulumi.String("FARGATE"),
 				},
@@ -1060,17 +1087,17 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("RSB_DOMAIN"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.String(env.Domain),
+							Value: pulumi.String(env.AwsServices.Route53.Domain),
 						},
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("RSB_BASTION_HOST"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.Sprintf("srv.%s.%s", env.Name, env.Domain),
+							Value: pulumi.Sprintf("srv.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 						},
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("RSB_ENV_BASTION_URL"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.Sprintf("http://bastion.%s.%s", env.Name, env.Domain),
+							Value: pulumi.Sprintf("http://bastion.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 						},
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("GITHUBOAUTHTOKEN"),
@@ -1209,7 +1236,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			RequestParameters: pulumi.StringMap{
 				"integration.request.header.x-api-key": pulumi.String("method.request.header.x-api-key"),
 			},
-			Uri: pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.Domain),
+			Uri: pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.AwsServices.Route53.Domain),
 		})
 		if err != nil {
 			return fmt.Errorf("creating rest api gw integration events: %w", err)
@@ -1224,7 +1251,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
 			ConnectionType:        pulumi.String("VPC_LINK"),
 			ConnectionId:          vpcLinks["rsb-service-users"].ID(),
-			Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.Domain),
+			Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.AwsServices.Route53.Domain),
 		})
 		if err != nil {
 			return fmt.Errorf("creating rest api gw integration login: %w", err)
@@ -1241,14 +1268,15 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		ctx.Export("result", pulumi.Map(map[string]pulumi.Input{
-			"name":               pulumi.String(env.Name),
-			"db_password":        dbMasterUserPassword,
-			"rmq_server":         bastionPrivRecord.Fqdn,
-			"rmq_admin_ui":       pulumi.Sprintf("%s:15672", bastionPubRecord.Fqdn),
-			"rmq_admin_password": rmqMasterUserPassword,
-			"services_routes":    pulumi.Map(serviceRecords),
-			"slack_webhook":      pulumi.String(env.SlackWebHook),
-			"domain":             pulumi.String(env.Domain),
+			"name":                  pulumi.String(env.Name),
+			"broker_server":         bastionPrivRecord.Fqdn,
+			"broker_admin_ui":       pulumi.Sprintf("%s:%d", bastionPubRecord.Fqdn, env.RsbServices.Broker.AdminPort),
+			"broker_username":       pulumi.String(env.RsbServices.Broker.Username),
+			"broker_admin_password": rmqMasterUserPassword,
+			"services_routes":       pulumi.Map(serviceRecords),
+			"slack_webhook":         pulumi.String(env.SlackWebHook),
+			"loadbalancer":          lbMain.DnsName,
+			"domain":                pulumi.String(env.AwsServices.Route53.Domain),
 		}))
 
 		return nil

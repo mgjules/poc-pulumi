@@ -66,7 +66,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				return
 			}
 
-			msg := fmt.Sprintf("Created environment %q with %v services on Domain %s in %s", envName, len(req.RsbServices), req.Domain, time.Since(start))
+			msg := fmt.Sprintf("Created environment %q with %v services on Domain %s in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
 			log.Infof(msg)
 			sendToSlackWebHook([]byte(msg), req.SlackWebHook)
 
@@ -185,7 +185,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				return
 			}
 
-			msg := fmt.Sprintf("Updated environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices), req.Domain, time.Since(start))
+			msg := fmt.Sprintf("Updated environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
 			log.Infof(msg)
 			sendToSlackWebHook([]byte(msg), req.SlackWebHook)
 

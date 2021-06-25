@@ -52,12 +52,12 @@ func sendToSlackWebHook(message []byte, hookURL string) error {
 
 func createOverview(result map[string]interface{}) string {
 	overview := fmt.Sprintf("ℹ️ Here is an overview of environment *%s*:\n", result["name"])
-	overview += fmt.Sprintf("*RabbitMQ admin:*\n%s (U: %s P: %s)\n", fmt.Sprintf("http(s)://%s/", result["rmq_admin_ui"]), "admin", result["rmq_admin_password"])
-	overview += fmt.Sprintf("*RabbitMQ server:*\n%s (U: %s P: %s)\n", result["rmq_server"], "admin", result["rmq_admin_password"])
+	overview += fmt.Sprintf("*RabbitMQ admin:*\n%s (U: %s P: %s)\n", fmt.Sprintf("http(s)://%s/", result["broker_admin_ui"]), result["broker_username"], result["broker_admin_password"])
+	overview += fmt.Sprintf("*RabbitMQ server:*\n%s (U: %s P: %s)\n", result["broker_server"], result["broker_username"], result["broker_admin_password"])
 
 	overview += "\n\n*Services*\n\n"
 	for svcName, svc := range result["services_routes"].(map[string]interface{}) {
-		overview += fmt.Sprintf("Service %q is available at: https://%s\n", svcName, svc)
+		overview += fmt.Sprintf("Service %q is available at: https://%s (%s)\n", svcName, svc, result["loadbalancer"])
 	}
 
 	return overview

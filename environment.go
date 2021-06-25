@@ -6,19 +6,11 @@ import (
 )
 
 type environment struct {
-	Name                   string             `json:"name" binding:"required"`
-	Domain                 string             `json:"domain"`
-	DNSZoneID              string             `json:"dns_zone_id"`
-	SlackWebHook           string             `json:"slack_webhook"`
-	EcsVolumeSize          int                `json:"ecs_volume_size"`
-	EcsCPU                 int                `json:"ecs_cpu"`
-	EcsMemory              int                `json:"ecs_memory"`
-	BastionAMIID           string             `json:"bastion_ami_id"`
-	BrokerDriver           string             `json:"broker_driver"`
-	ServicesCORSOriginURLs string             `json:"services_cors_origin_urls"`
-	RsbServices            []RsbService       `json:"rsb_services"`
-	AdditionalAwsServices  AwsServices        `json:"additional_aws_services"`
-	ThirdPartyServices     ThirdPartyServices `json:"third_party_services"`
+	Name               string             `json:"name" binding:"required"`
+	SlackWebHook       string             `json:"slack_webhook"`
+	AwsServices        AwsServices        `json:"aws_services"`
+	RsbServices        RsbServices        `json:"rsb_services"`
+	ThirdPartyServices ThirdPartyServices `json:"third_party_services"`
 }
 
 func (e environment) Validate() error {
@@ -30,40 +22,56 @@ func (e environment) Validate() error {
 }
 
 func (e *environment) SetDefaults(cfg config) {
-	if e.Domain == "" {
-		e.Domain = cfg.DNSDomain
+	if e.AwsServices.Route53.Domain == "" {
+		e.AwsServices.Route53.Domain = cfg.DNSDomain
 	}
 
-	if e.DNSZoneID == "" {
-		e.DNSZoneID = cfg.DNSZoneID
+	if e.AwsServices.Route53.DNSZoneID == "" {
+		e.AwsServices.Route53.DNSZoneID = cfg.DNSZoneID
 	}
 
-	if e.EcsVolumeSize == 0 {
-		e.EcsVolumeSize = 32
+	if e.AwsServices.ECS.VolumeSize == 0 {
+		e.AwsServices.ECS.VolumeSize = 32
 	}
 
-	if e.EcsCPU == 0 {
-		e.EcsCPU = 256
+	if e.AwsServices.ECS.CPU == 0 {
+		e.AwsServices.ECS.CPU = 256
 	}
 
-	if e.EcsMemory == 0 {
-		e.EcsMemory = 512
+	if e.AwsServices.ECS.Memory == 0 {
+		e.AwsServices.ECS.Memory = 512
 	}
 
-	if e.BastionAMIID == "" {
-		e.BastionAMIID = "ami-08bac620dc84221eb"
+	if e.AwsServices.Bastion.AMIID == "" {
+		e.AwsServices.Bastion.AMIID = "ami-08bac620dc84221eb"
 	}
 
-	if e.BrokerDriver == "" {
-		e.BrokerDriver = "rabbitmq"
+	if e.AwsServices.RDS.Username == "" {
+		e.AwsServices.RDS.Username = "admin"
 	}
 
-	if e.ServicesCORSOriginURLs == "" {
-		e.ServicesCORSOriginURLs = "http://localhost:8080"
+	if e.RsbServices.CORSOriginURLs == "" {
+		e.RsbServices.CORSOriginURLs = "http://localhost:8080"
 	}
 
-	if len(e.RsbServices) == 0 {
-		e.RsbServices = []RsbService{
+	if e.RsbServices.Broker.Driver == "" {
+		e.RsbServices.Broker.Driver = "rabbitmq"
+	}
+
+	if e.RsbServices.Broker.Username == "" {
+		e.RsbServices.Broker.Username = "admin"
+	}
+
+	if e.RsbServices.Broker.Port == 0 {
+		e.RsbServices.Broker.Port = 5672
+	}
+
+	if e.RsbServices.Broker.AdminPort == 0 {
+		e.RsbServices.Broker.AdminPort = 15672
+	}
+
+	if len(e.RsbServices.Services) == 0 {
+		e.RsbServices.Services = []RsbService{
 			{
 				Name:         "rsb-service-feeder",
 				SourceBranch: "develop",
@@ -86,9 +94,9 @@ func (e *environment) SetDefaults(cfg config) {
 			},
 		}
 	} else {
-		for i, rsbService := range e.RsbServices {
+		for i, rsbService := range e.RsbServices.Services {
 			if rsbService.SourceBranch == "" {
-				e.RsbServices[i].SourceBranch = "develop"
+				e.RsbServices.Services[i].SourceBranch = "develop"
 			}
 		}
 	}
