@@ -1,11 +1,11 @@
 package main
 
 type AwsServices struct {
-	Route53       Route53       `json:"route53"`
-	Bastion       Bastion       `json:"bastion"`
-	ECS           ECS           `json:"ecs"`
-	ElasticSearch ElasticSearch `json:"es"`
-	RDS           RDS           `json:"rds"`
+	Route53 Route53 `json:"route53"`
+	Bastion Bastion `json:"bastion"`
+	ECS     ECS     `json:"ecs"`
+	ES      ES      `json:"es"`
+	RDS     RDS     `json:"rds"`
 }
 
 type Route53 struct {
@@ -23,8 +23,9 @@ type ECS struct {
 	VolumeSize int `json:"volume_size"`
 }
 
-type ElasticSearch struct {
-	Enabled bool `json:"enabled"`
+type ES struct {
+	Enabled bool   `json:"enabled"`
+	Version string `json:"version"`
 }
 
 type RDS struct {

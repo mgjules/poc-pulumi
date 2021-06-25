@@ -15,6 +15,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/ecs"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticache"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticloadbalancingv2"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticsearch"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
@@ -442,8 +443,49 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}
 
 		// Elastic search
-		if env.AwsServices.ElasticSearch.Enabled {
-			// TODO: implement
+		var esEndpoint pulumi.StringInput
+		if env.AwsServices.ES.Enabled {
+			// _, err = iam.NewServiceLinkedRole(ctx, "es-iam-slr-"+env.Name, &iam.ServiceLinkedRoleArgs{
+			// 	AwsServiceName: pulumi.String("es.amazonaws.com"),
+			// })
+			// if err != nil {
+			// 	return fmt.Errorf("creating elastic search iam service linked role: %w", err)
+			// }
+
+			es, err := elasticsearch.NewDomain(ctx, "es-domain-"+env.Name, &elasticsearch.DomainArgs{
+				AccessPolicies: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"*"},"Action":"es:*","Resource":"arn:aws:es:*:*:*"}]}`),
+				DomainEndpointOptions: elasticsearch.DomainDomainEndpointOptionsArgs{
+					EnforceHttps:      pulumi.Bool(true),
+					TlsSecurityPolicy: pulumi.String("Policy-Min-TLS-1-2-2019-07"),
+				},
+				DomainName: pulumi.String(env.Name),
+				EbsOptions: elasticsearch.DomainEbsOptionsArgs{
+					EbsEnabled: pulumi.Bool(true),
+					VolumeSize: pulumi.Int(10),
+					VolumeType: pulumi.String("gp2"),
+				},
+				ClusterConfig: elasticsearch.DomainClusterConfigArgs{
+					InstanceCount: pulumi.Int(2),
+					InstanceType:  pulumi.String("t2.small.elasticsearch"),
+				},
+				ElasticsearchVersion: pulumi.String(env.AwsServices.ES.Version),
+				VpcOptions: elasticsearch.DomainVpcOptionsArgs{
+					SecurityGroupIds: pulumi.StringArray{
+						sg.ID(),
+					},
+					SubnetIds: pulumi.StringArray{
+						subnetGroups[_subnetGroupDatabase][0].ID(),
+					},
+				},
+				Tags: tags,
+			})
+			if err != nil {
+				return fmt.Errorf("creating elastic search domain: %w", err)
+			}
+
+			esEndpoint = es.Endpoint
+		} else {
+			esEndpoint = pulumi.String("")
 		}
 
 		// Elastic cache cluster
@@ -880,6 +922,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				dbMasterUserPassword,
 				rmqMasterUserPassword,
 				bastionPrivRecord.Fqdn,
+				esEndpoint,
 			).ApplyT(func(args []interface{}) (string, error) {
 				rsbServiceName := args[4].(string)
 
@@ -920,6 +963,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				dbMasterUserPassword := args[5].(string)
 				rmqMasterUserPassword := args[6].(string)
 				bastionPrivURL := args[7].(string)
+				esEndpoint := args[8].(string)
 
 				mappings := map[string]string{
 					// Bastion
@@ -980,7 +1024,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					"REPLACEME_ElasticacheHostname": *elcHostname,
 
 					// Elastic Search
-					// "REPLACEME_ELASTICSEARCH_URL":                fmt.Sprintf("https://%s", env.ElasticSearchEndpoint),
+					"REPLACEME_ELASTICSEARCH_URL":          fmt.Sprintf("https://%s", esEndpoint),
 					"REPLACEME_SERVICE_REGISTRY_CACHE_TAG": fmt.Sprintf("rsb_sr_%s", env.Name),
 
 					// Datadog

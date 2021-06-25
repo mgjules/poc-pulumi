@@ -30,6 +30,10 @@ func (e *environment) SetDefaults(cfg config) {
 		e.AwsServices.Route53.DNSZoneID = cfg.DNSZoneID
 	}
 
+	if e.AwsServices.ES.Version == "" {
+		e.AwsServices.ES.Version = "7.10"
+	}
+
 	if e.AwsServices.ECS.VolumeSize == 0 {
 		e.AwsServices.ECS.VolumeSize = 32
 	}
