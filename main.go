@@ -44,6 +44,7 @@ func run() error {
 	{
 		api.POST("/environments", createEnvironment(cfg, project, auto.WorkDir(".")))
 		api.GET("/environments", listEnvironment(cfg, project, auto.WorkDir(".")))
+		api.GET("/environments/history/:name", historyEnvironment(cfg, project, auto.WorkDir(".")))
 		api.GET("/environments/:name", getEnvironment(cfg, project, auto.WorkDir(".")))
 		api.POST("/environments/preview/:name", previewEnvironment(cfg, project, auto.WorkDir(".")))
 		api.POST("/environments/refresh/:name", refreshEnvironment(cfg, project, auto.WorkDir(".")))

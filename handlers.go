@@ -153,8 +153,6 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
-		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: req.GithubOrgName})
-		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: req.GithubAuthToken, Secret: true})
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
@@ -164,6 +162,51 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 
 		c.JSON(http.StatusOK, gin.H{
 			"result": outs["result"].Value,
+		})
+	}
+}
+
+func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
+	type request struct {
+		credentials
+	}
+
+	return func(c *gin.Context) {
+		var req request
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			return
+		}
+
+		req.credentials.SetDefaults(cfg)
+
+		ctx := c.Request.Context()
+		envName := c.Param("name")
+
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
+		if err != nil {
+			// if stack doesn't already exist, 404
+			if auto.IsSelectStack404Error(err) {
+				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				return
+			}
+
+			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			return
+		}
+
+		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: req.AWSAccessKeyID, Secret: true})
+		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: req.AWSSecretAccessKey, Secret: true})
+		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: req.AWSRegion})
+
+		history, err := s.History(ctx, 0, 0)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"result": history,
 		})
 	}
 }
