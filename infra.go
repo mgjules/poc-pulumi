@@ -1269,7 +1269,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			RequestParameters: pulumi.StringMap{
 				"integration.request.header.x-api-key": pulumi.String("method.request.header.x-api-key"),
 			},
-			Uri: pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.AwsServices.Route53.Domain),
+			Uri: pulumi.Sprintf("https://%s/api/events", serviceRecords["rsb-service-feeder"]),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
 			return fmt.Errorf("new rest api gw integration events: %w", err)
@@ -1284,7 +1284,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			PassthroughBehavior:   pulumi.String("WHEN_NO_MATCH"),
 			ConnectionType:        pulumi.String("VPC_LINK"),
 			ConnectionId:          vpcLinkIDs["rsb-service-users"],
-			Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.AwsServices.Route53.Domain),
+			Uri:                   pulumi.Sprintf("https://%s/api/login", serviceRecords["rsb-service-users"]),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
 			return fmt.Errorf("new rest api gw integration login: %w", err)
