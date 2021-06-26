@@ -54,11 +54,10 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
-		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: cfg.GithubOrgName})
-		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: cfg.GithubAuthToken, Secret: true})
 
 		go func() {
 			start := time.Now()
@@ -140,6 +139,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
@@ -173,6 +173,7 @@ func exportEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
@@ -211,6 +212,7 @@ func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
@@ -263,11 +265,10 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
-		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: cfg.GithubOrgName})
-		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: cfg.GithubAuthToken, Secret: true})
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
@@ -331,6 +332,7 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
@@ -407,6 +409,7 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
@@ -504,11 +507,10 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
-		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: cfg.GithubOrgName})
-		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: cfg.GithubAuthToken, Secret: true})
 
 		go func() {
 			start := time.Now()
@@ -554,11 +556,10 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
+		// Used for s3 backend storage for stack
 		_ = s.SetConfig(ctx, "aws:accessKey", auto.ConfigValue{Value: cfg.AWSAccessKeyID, Secret: true})
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
-		_ = s.SetConfig(ctx, "github:owner", auto.ConfigValue{Value: cfg.GithubOrgName})
-		_ = s.SetConfig(ctx, "github:token", auto.ConfigValue{Value: cfg.GithubAuthToken, Secret: true})
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
