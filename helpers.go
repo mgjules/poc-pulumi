@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -21,20 +22,31 @@ func shortEnvName(env, name string) string {
 	return fmt.Sprintf("%s-%s", env, shortName(name))
 }
 
-func sendToSlackWebHook(message []byte, hookURL string) error {
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-
-	m := make(map[string]string)
-	m["text"] = string(message)
-	data, err := json.Marshal(m)
-	if err != nil {
-		log.Errorf("marshal text for slack: %v", err)
-		return fmt.Errorf("marshal text for slack: %w", err)
+func sendToSlackWebHook(message string, hookURL string) error {
+	if message == "" {
+		log.Error("message can't be empty")
+		return errors.New("message can't be empty")
 	}
 
-	req, err := http.NewRequest("POST", hookURL, bytes.NewBuffer(data))
+	if hookURL == "" {
+		log.Error("hookURL can't be empty")
+		return errors.New("hookURL can't be empty")
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+
+	m := map[string]string{
+		"text": message,
+	}
+	marshalledMessage, err := json.Marshal(m)
 	if err != nil {
-		log.Errorf("create http request: %v", err)
+		log.Errorf("marshal message for slack: %v", err)
+		return fmt.Errorf("marshal message for slack: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", hookURL, bytes.NewBuffer(marshalledMessage))
+	if err != nil {
+		log.Errorf("create http request for slack webhook: %v", err)
 		return err
 	}
 

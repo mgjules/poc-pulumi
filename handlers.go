@@ -62,20 +62,25 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		go func() {
 			start := time.Now()
 
+			sendToSlackWebHook(
+				fmt.Sprintf("Creating environment %q with %v services on Domain %q...", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain),
+				req.SlackWebHook,
+			)
+
 			res, err := s.Up(context.Background(), optup.ProgressStreams(os.Stdout))
 			if err != nil {
 				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("create env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while creating environment %q", envName)), req.SlackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while creating environment %q", envName), req.SlackWebHook)
 				return
 			}
 
 			msg := fmt.Sprintf("Created environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
 			log.Infof(msg)
-			sendToSlackWebHook([]byte(msg), req.SlackWebHook)
+			sendToSlackWebHook(msg, req.SlackWebHook)
 
 			result := res.Outputs["result"].Value.(map[string]interface{})
-			sendToSlackWebHook([]byte(createOverview(result)), req.SlackWebHook)
+			sendToSlackWebHook(createOverview(result), req.SlackWebHook)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
@@ -296,17 +301,22 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		go func() {
 			start := time.Now()
 
+			sendToSlackWebHook(
+				fmt.Sprintf("Previewing environment %q on Domain %q...", envName, domain),
+				slackWebHook,
+			)
+
 			_, err = s.Preview(context.Background() /*optpreview.Diff(),*/, optpreview.ProgressStreams(os.Stdout))
 			if err != nil {
 				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("preview env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while previewing environment %q", envName)), slackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while previewing environment %q", envName), slackWebHook)
 				return
 			}
 
 			msg := fmt.Sprintf("Previewed environment %q on Domain %q in %s", envName, domain, time.Since(start))
 			log.Infof(msg)
-			sendToSlackWebHook([]byte(msg), slackWebHook)
+			sendToSlackWebHook(msg, slackWebHook)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
@@ -363,17 +373,22 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		go func() {
 			start := time.Now()
 
+			sendToSlackWebHook(
+				fmt.Sprintf("Refreshing environment %q on Domain %q...", envName, domain),
+				slackWebHook,
+			)
+
 			_, err = s.Refresh(context.Background() /*optrefresh.Diff(),*/, optrefresh.ProgressStreams(os.Stdout))
 			if err != nil {
 				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("refresh env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while refreshing environment %q", envName)), slackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while refreshing environment %q", envName), slackWebHook)
 				return
 			}
 
 			msg := fmt.Sprintf("Refreshed environment %q on Domain %q in %s", envName, domain, time.Since(start))
 			log.Infof(msg)
-			sendToSlackWebHook([]byte(msg), slackWebHook)
+			sendToSlackWebHook(msg, slackWebHook)
 		}()
 
 		c.JSON(http.StatusCreated, gin.H{
@@ -440,11 +455,16 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		go func() {
 			start := time.Now()
 
+			sendToSlackWebHook(
+				fmt.Sprintf("Importing environment %q on Domain %q...", envName, domain),
+				slackWebHook,
+			)
+
 			marshalledStack, err := json.Marshal(req)
 			if err != nil {
 				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("marshal stack env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while marshalling stack environment %q", envName)), slackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while marshalling stack environment %q", envName), slackWebHook)
 				return
 			}
 
@@ -456,13 +476,13 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			if err := s.Import(context.Background(), deployment); err != nil {
 				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("import env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while importing environment %q", envName)), slackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while importing environment %q", envName), slackWebHook)
 				return
 			}
 
 			msg := fmt.Sprintf("Imported environment %q on Domain %q in %s", envName, domain, time.Since(start))
 			log.Infof(msg)
-			sendToSlackWebHook([]byte(msg), slackWebHook)
+			sendToSlackWebHook(msg, slackWebHook)
 		}()
 
 		c.JSON(http.StatusCreated, gin.H{
@@ -515,23 +535,28 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		go func() {
 			start := time.Now()
 
+			sendToSlackWebHook(
+				fmt.Sprintf("Updating environment %q with %v services on Domain %q...", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain),
+				req.SlackWebHook,
+			)
+
 			_, err = s.Up(context.Background() /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
 			if err != nil {
 				if auto.IsConcurrentUpdateError(err) {
 					// c.JSON(http.StatusConflict, gin.H{"result": fmt.Sprintf("environment %q already has update in progress", envName)})
-					sendToSlackWebHook([]byte(fmt.Sprintf("Environment %q already has update in progress", envName)), req.SlackWebHook)
+					sendToSlackWebHook(fmt.Sprintf("Environment %q already has update in progress", envName), req.SlackWebHook)
 					return
 				}
 
 				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("update env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while updating environment %q", envName)), req.SlackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while updating environment %q", envName), req.SlackWebHook)
 				return
 			}
 
 			msg := fmt.Sprintf("Updated environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
 			log.Infof(msg)
-			sendToSlackWebHook([]byte(msg), req.SlackWebHook)
+			sendToSlackWebHook(msg, req.SlackWebHook)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
@@ -587,25 +612,30 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		go func() {
 			start := time.Now()
 
+			sendToSlackWebHook(
+				fmt.Sprintf("Deleting environment %q on Domain %q...", envName, domain),
+				slackWebHook,
+			)
+
 			ctx := context.Background()
 
 			if _, err := s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout)); err != nil {
 				// 	c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("destroy env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while deleting environment %q", envName)), slackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while deleting environment %q", envName), slackWebHook)
 				return
 			}
 
 			if err = s.Workspace().RemoveStack(ctx, envName); err != nil {
 				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("remove stack env %q: %v", envName, err)
-				sendToSlackWebHook([]byte(fmt.Sprintf("Error occured while removing stack for environment %q", envName)), slackWebHook)
+				sendToSlackWebHook(fmt.Sprintf("Error occured while removing stack for environment %q", envName), slackWebHook)
 				return
 			}
 
 			msg := fmt.Sprintf("Deleted environment %q on Domain %q in %s", envName, domain, time.Since(start))
 			log.Infof(msg)
-			sendToSlackWebHook([]byte(msg), slackWebHook)
+			sendToSlackWebHook(msg, slackWebHook)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
