@@ -38,20 +38,22 @@ func run() error {
 		},
 	})
 
+	workDir := auto.WorkDir(".")
+
 	router := gin.Default()
 
 	api := router.Group("/api")
 	{
-		api.POST("/environments", createEnvironment(cfg, project, auto.WorkDir(".")))
-		api.GET("/environments", listEnvironment(cfg, project, auto.WorkDir(".")))
-		api.GET("/environments/history/:name", historyEnvironment(cfg, project, auto.WorkDir(".")))
-		api.GET("/environments/export/:name", exportEnvironment(cfg, project, auto.WorkDir(".")))
-		api.GET("/environments/:name", getEnvironment(cfg, project, auto.WorkDir(".")))
-		api.POST("/environments/preview/:name", previewEnvironment(cfg, project, auto.WorkDir(".")))
-		api.POST("/environments/refresh/:name", refreshEnvironment(cfg, project, auto.WorkDir(".")))
-		api.POST("/environments/import/:name", importEnvironment(cfg, project, auto.WorkDir(".")))
-		api.PUT("/environments/:name", updateEnvironment(cfg, project, auto.WorkDir(".")))
-		api.DELETE("/environments/:name", deleteEnvironment(cfg, project, auto.WorkDir(".")))
+		api.POST("/environments", createEnvironment(cfg, project, workDir))
+		api.GET("/environments", listEnvironment(cfg, project, workDir))
+		api.GET("/environments/history/:name", historyEnvironment(cfg, project, workDir))
+		api.GET("/environments/export/:name", exportEnvironment(cfg, project, workDir))
+		api.GET("/environments/:name", getEnvironment(cfg, project, workDir))
+		api.POST("/environments/preview/:name", previewEnvironment(cfg, project, workDir))
+		api.POST("/environments/refresh/:name", refreshEnvironment(cfg, project, workDir))
+		api.POST("/environments/import/:name", importEnvironment(cfg, project, workDir))
+		api.PUT("/environments/:name", updateEnvironment(cfg, project, workDir))
+		api.DELETE("/environments/:name", deleteEnvironment(cfg, project, workDir))
 	}
 
 	if err := router.Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
