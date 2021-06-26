@@ -27,12 +27,12 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 	return func(c *gin.Context) {
 		var req request
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
 		if err := req.environment.Validate(); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -46,11 +46,11 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		if err != nil {
 			// if stack already exists, 409
 			if auto.IsCreateStack409Error(err) {
-				c.JSON(http.StatusConflict, gin.H{"result": fmt.Sprintf("environment %q already exists", envName)})
+				c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("environment %q already exists", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -69,7 +69,6 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 			res, err := s.Up(context.Background(), optup.ProgressStreams(os.Stdout))
 			if err != nil {
-				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("create env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while creating environment %q", envName), req.SlackWebHook)
 				return
@@ -84,7 +83,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
-			"result": fmt.Sprintf("environment %q is being created", envName),
+			"error": fmt.Sprintf("environment %q is being created", envName),
 		})
 	}
 }
@@ -97,7 +96,7 @@ func listEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerF
 	return func(c *gin.Context) {
 		var req request
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -107,7 +106,7 @@ func listEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerF
 
 		ws, err := auto.NewLocalWorkspace(ctx, opts...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -117,7 +116,7 @@ func listEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerF
 
 		stacks, err := ws.ListStacks(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -136,11 +135,11 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -151,7 +150,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -170,11 +169,11 @@ func exportEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -185,12 +184,12 @@ func exportEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 		dep, err := s.Export(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
 		if dep.Version != 3 {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": "expected deployment version 3"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "expected deployment version 3"})
 			return
 		}
 
@@ -209,11 +208,11 @@ func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -224,7 +223,7 @@ func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 
 		history, err := s.History(ctx, 0, 0)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -243,12 +242,12 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 	return func(c *gin.Context) {
 		var req request
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
 		if err := req.environment.Validate(); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -262,11 +261,11 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -277,14 +276,14 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
 		result, ok := outs["result"].Value.(map[string]interface{})
 		if !ok {
 			log.Errorf("can't retrieve stored output for env %q", envName)
-			c.JSON(http.StatusInternalServerError, gin.H{"result": "Error retrieving stored output. Try updating the environment again to regenerate the output."})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving stored output. Try updating the environment again to regenerate the output."})
 			return
 		}
 
@@ -308,7 +307,6 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 
 			_, err = s.Preview(context.Background() /*optpreview.Diff(),*/, optpreview.ProgressStreams(os.Stdout))
 			if err != nil {
-				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("preview env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while previewing environment %q", envName), slackWebHook)
 				return
@@ -334,11 +332,11 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -349,7 +347,7 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -380,7 +378,6 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 
 			_, err = s.Refresh(context.Background() /*optrefresh.Diff(),*/, optrefresh.ProgressStreams(os.Stdout))
 			if err != nil {
-				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("refresh env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while refreshing environment %q", envName), slackWebHook)
 				return
@@ -391,7 +388,7 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 			sendToSlackWebHook(msg, slackWebHook)
 		}()
 
-		c.JSON(http.StatusCreated, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"result": fmt.Sprintf("environment %q is being refreshed", envName),
 		})
 	}
@@ -405,7 +402,7 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 	return func(c *gin.Context) {
 		var req request
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -416,11 +413,11 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -431,7 +428,7 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -462,7 +459,6 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 			marshalledStack, err := json.Marshal(req)
 			if err != nil {
-				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("marshal stack env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while marshalling stack environment %q", envName), slackWebHook)
 				return
@@ -474,7 +470,6 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			}
 
 			if err := s.Import(context.Background(), deployment); err != nil {
-				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("import env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while importing environment %q", envName), slackWebHook)
 				return
@@ -485,7 +480,7 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			sendToSlackWebHook(msg, slackWebHook)
 		}()
 
-		c.JSON(http.StatusCreated, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"result": fmt.Sprintf("environment %q is being imported", envName),
 		})
 	}
@@ -500,12 +495,12 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 	return func(c *gin.Context) {
 		var req request
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
 		if err := req.environment.Validate(); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -519,11 +514,11 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -543,12 +538,10 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			_, err = s.Up(context.Background() /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
 			if err != nil {
 				if auto.IsConcurrentUpdateError(err) {
-					// c.JSON(http.StatusConflict, gin.H{"result": fmt.Sprintf("environment %q already has update in progress", envName)})
 					sendToSlackWebHook(fmt.Sprintf("Environment %q already has update in progress", envName), req.SlackWebHook)
 					return
 				}
 
-				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("update env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while updating environment %q", envName), req.SlackWebHook)
 				return
@@ -573,11 +566,11 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
 		if err != nil {
 			if auto.IsSelectStack404Error(err) {
-				c.JSON(http.StatusNotFound, gin.H{"result": fmt.Sprintf("environment %q not found", envName)})
+				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -588,7 +581,7 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 		outs, err := s.Outputs(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -620,14 +613,13 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			ctx := context.Background()
 
 			if _, err := s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout)); err != nil {
-				// 	c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
+				// 	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				log.Errorf("destroy env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while deleting environment %q", envName), slackWebHook)
 				return
 			}
 
 			if err = s.Workspace().RemoveStack(ctx, envName); err != nil {
-				// c.JSON(http.StatusInternalServerError, gin.H{"result": err.Error()})
 				log.Errorf("remove stack env %q: %v", envName, err)
 				sendToSlackWebHook(fmt.Sprintf("Error occured while removing stack for environment %q", envName), slackWebHook)
 				return
