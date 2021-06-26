@@ -81,10 +81,6 @@ func (e *environment) SetDefaults(cfg config) {
 		if rsbService.SourceBranch == "" && rsbService.SourceCommit == "" {
 			e.RsbServices.Services[i].SourceBranch = "develop"
 		}
-
-		if rsbService.Count == 0 {
-			e.RsbServices.Services[i].Count = 1
-		}
 	}
 
 	// Don't even think of running the bus without the services below
