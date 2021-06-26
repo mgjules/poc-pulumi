@@ -79,28 +79,37 @@ func (e *environment) SetDefaults(cfg config) {
 			{
 				Name:         "rsb-service-feeder",
 				SourceBranch: "develop",
+				Count:        1,
 			},
 			{
 				Name:         "rsb-service-worker",
 				SourceBranch: "develop",
+				Count:        1,
 			},
 			{
 				Name:         "rsb-service-ventureconfig",
 				SourceBranch: "develop",
+				Count:        1,
 			},
 			{
 				Name:         "rsb-service-servicerepository",
 				SourceBranch: "develop",
+				Count:        1,
 			},
 			{
 				Name:         "rsb-service-users",
 				SourceBranch: "develop",
+				Count:        1,
 			},
 		}
 	} else {
 		for i, rsbService := range e.RsbServices.Services {
-			if rsbService.SourceBranch == "" {
+			if rsbService.SourceBranch == "" && rsbService.SourceCommit == "" {
 				e.RsbServices.Services[i].SourceBranch = "develop"
+			}
+
+			if rsbService.Count == 0 {
+				e.RsbServices.Services[i].Count = 1
 			}
 		}
 	}

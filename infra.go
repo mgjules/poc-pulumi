@@ -1074,7 +1074,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Name:           pulumi.String(rsbService.Name),
 				LaunchType:     pulumi.String("FARGATE"),
 				TaskDefinition: taskDef.Arn,
-				DesiredCount:   pulumi.Int(1),
+				DesiredCount:   pulumi.Int(rsbService.Count),
 				LoadBalancers:  serviceLoadBalancers,
 				NetworkConfiguration: ecs.ServiceNetworkConfigurationArgs{
 					Subnets: pulumi.StringArray{
