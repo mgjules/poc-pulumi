@@ -74,43 +74,33 @@ func (e *environment) SetDefaults(cfg config) {
 		e.RsbServices.Broker.AdminPort = 15672
 	}
 
-	if len(e.RsbServices.Services) == 0 {
-		e.RsbServices.Services = []RsbService{
-			{
-				Name:         "rsb-service-feeder",
-				SourceBranch: "develop",
-				Count:        1,
-			},
-			{
-				Name:         "rsb-service-worker",
-				SourceBranch: "develop",
-				Count:        1,
-			},
-			{
-				Name:         "rsb-service-ventureconfig",
-				SourceBranch: "develop",
-				Count:        1,
-			},
-			{
-				Name:         "rsb-service-servicerepository",
-				SourceBranch: "develop",
-				Count:        1,
-			},
-			{
-				Name:         "rsb-service-users",
-				SourceBranch: "develop",
-				Count:        1,
-			},
-		}
-	} else {
-		for i, rsbService := range e.RsbServices.Services {
-			if rsbService.SourceBranch == "" && rsbService.SourceCommit == "" {
-				e.RsbServices.Services[i].SourceBranch = "develop"
-			}
+	rsbServiceNames := map[string]struct{}{}
+	for i, rsbService := range e.RsbServices.Services {
+		rsbServiceNames[rsbService.Name] = struct{}{}
 
-			if rsbService.Count == 0 {
-				e.RsbServices.Services[i].Count = 1
-			}
+		if rsbService.SourceBranch == "" && rsbService.SourceCommit == "" {
+			e.RsbServices.Services[i].SourceBranch = "develop"
+		}
+
+		if rsbService.Count == 0 {
+			e.RsbServices.Services[i].Count = 1
+		}
+	}
+
+	// Don't even think of running the bus without the services below
+	for _, rsbCoreServiceName := range []string{
+		"rsb-service-feeder",
+		"rsb-service-worker",
+		"rsb-service-ventureconfig",
+		"rsb-service-servicerepository",
+		"rsb-service-users",
+	} {
+		if _, found := rsbServiceNames[rsbCoreServiceName]; !found {
+			e.RsbServices.Services = append(e.RsbServices.Services, RsbService{
+				Name:         rsbCoreServiceName,
+				SourceBranch: "develop",
+				Count:        1,
+			})
 		}
 	}
 }
