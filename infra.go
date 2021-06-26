@@ -1046,6 +1046,33 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 				containerDefinitions.Definitions[0]["environment"] = environments
 
+				// configure Datadog logging
+				// https://docs.datadoghq.com/integrations/ecs_fargate/#log-collection
+				if env.ThirdPartyServices.DataDog.Enabled {
+					containerDefinitions.Definitions[0]["logConfiguration"] = map[string]interface{}{
+						"logDriver": "awsfirelens",
+						"options": map[string]interface{}{
+							"Name":           "datadog",
+							"apikey":         env.ThirdPartyServices.DataDog.ApiKey,
+							"Host":           env.ThirdPartyServices.DataDog.LogBaseURL,
+							"dd_service":     rsbService.Name,
+							"dd_source":      env.Name,
+							"dd_message_key": "log",
+							"TLS":            "on",
+							"provider":       "ecs",
+						},
+					}
+
+					containerDefinitions.Definitions = append(containerDefinitions.Definitions, map[string]interface{}{
+						"essential": true,
+						"firelensConfiguration": map[string]interface{}{
+							"type": "fluentbit",
+						},
+						"image": "906394416424.dkr.ecr.eu-west-1.amazonaws.com/aws-for-fluent-bit:latest",
+						"name":  "fluentbit-log-router",
+					})
+				}
+
 				jsonB, err := json.Marshal(containerDefinitions.Definitions)
 				if err != nil {
 					return "", fmt.Errorf("marshal base task def [%s]: %w", rsbServiceName, err)
