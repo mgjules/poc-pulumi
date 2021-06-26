@@ -68,7 +68,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Token: pulumi.String(cred.GithubAuthToken),
 		})
 		if err != nil {
-			return fmt.Errorf("creating github provider: %w", err)
+			return fmt.Errorf("new github provider: %w", err)
 		}
 
 		awsProvider, err := aws.NewProvider(ctx, "provider-aws-"+env.Name, &aws.ProviderArgs{
@@ -83,7 +83,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("creating aws provider: %w", err)
+			return fmt.Errorf("new aws provider: %w", err)
 		}
 
 		// Resource Group
@@ -95,7 +95,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating resource group: %w", err)
+			return fmt.Errorf("new resource group: %w", err)
 		}
 
 		// VPC
@@ -104,7 +104,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			AssignGeneratedIpv6CidrBlock: pulumi.Bool(true),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating vpc: %w", err)
+			return fmt.Errorf("new vpc: %w", err)
 		}
 
 		// Subnets
@@ -118,7 +118,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				VpcId:               vpc.ID(),
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating vpc subnet [%s]: %w", name, err)
+				return fmt.Errorf("new vpc subnet [%s]: %w", name, err)
 			}
 
 			subnetGroups[subnet.Group] = append(subnetGroups[subnet.Group], sbnt)
@@ -129,13 +129,13 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			VpcId: vpc.ID(),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating internet gateway: %w", err)
+			return fmt.Errorf("new internet gateway: %w", err)
 		}
 
 		// Elastic IP
 		eip, err := ec2.NewEip(ctx, "eip-"+env.Name, &ec2.EipArgs{}, pulumi.DependsOn([]pulumi.Resource{igw}), pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating elastic ip: %w", err)
+			return fmt.Errorf("new elastic ip: %w", err)
 		}
 
 		// NAT Gateway
@@ -144,7 +144,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			SubnetId:     subnetGroups[_subnetGroupPublic][0].ID(),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating internet gateway: %w", err)
+			return fmt.Errorf("new internet gateway: %w", err)
 		}
 
 		// Route tables
@@ -155,7 +155,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				VpcId: vpc.ID(),
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating route table [%s]: %w", routeTableName, err)
+				return fmt.Errorf("new route table [%s]: %w", routeTableName, err)
 			}
 
 			routeTables[routeTableName] = rt
@@ -175,7 +175,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			routeName := "route-default-" + env.Name + "-" + groupName
 			_, err = ec2.NewRoute(ctx, routeName, routeArgs, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating default route [%s]: %w", routeName, err)
+				return fmt.Errorf("new default route [%s]: %w", routeName, err)
 			}
 
 			// Route table assiociations
@@ -186,7 +186,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					SubnetId:     subnet.ID(),
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("creating route table assiociation [%s]: %w", routeAssocName, err)
+					return fmt.Errorf("new route table assiociation [%s]: %w", routeAssocName, err)
 				}
 			}
 		}
@@ -265,7 +265,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating security group: %w", err)
+			return fmt.Errorf("new security group: %w", err)
 		}
 
 		// Certificate for services
@@ -274,7 +274,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			ValidationMethod: pulumi.String("DNS"),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating cert for services: %w", err)
+			return fmt.Errorf("new cert for services: %w", err)
 		}
 
 		// Validation CNAME record for certificate services
@@ -288,7 +288,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating record for cert validation for services: %w", err)
+			return fmt.Errorf("new record for cert validation for services: %w", err)
 		}
 
 		// Request certificate validation for services
@@ -299,7 +299,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating cert validation for services: %w", err)
+			return fmt.Errorf("new cert validation for services: %w", err)
 		}
 
 		// Certificate for wildcard
@@ -308,7 +308,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			ValidationMethod: pulumi.String("DNS"),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating cert for wildcard: %w", err)
+			return fmt.Errorf("new cert for wildcard: %w", err)
 		}
 
 		// Validation CNAME record for certificate wildcard
@@ -322,7 +322,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating record for cert validation for wildcard: %w", err)
+			return fmt.Errorf("new record for cert validation for wildcard: %w", err)
 		}
 
 		// Request certificate validation for wildcard
@@ -333,7 +333,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating cert validation for wildcard: %w", err)
+			return fmt.Errorf("new cert validation for wildcard: %w", err)
 		}
 
 		var dbMasterUserPassword pulumi.StringInput
@@ -346,7 +346,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					Special: pulumi.Bool(false),
 				})
 				if err != nil {
-					return fmt.Errorf("creating db master user password: %w", err)
+					return fmt.Errorf("new db master user password: %w", err)
 				}
 
 				dbMasterUserPassword = dbMasterUserPasswordGenerated.Result
@@ -366,7 +366,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Special: pulumi.Bool(false),
 			})
 			if err != nil {
-				return fmt.Errorf("creating rmq master user password: %w", err)
+				return fmt.Errorf("new rmq master user password: %w", err)
 			}
 
 			rmqMasterUserPassword = rmqMasterUserPasswordGenerated.Result
@@ -393,7 +393,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			UserDataBase64: UserDataBase64,
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating ec2 instance for bastion: %w", err)
+			return fmt.Errorf("new ec2 instance for bastion: %w", err)
 		}
 
 		// Public A record for bastion instance
@@ -407,7 +407,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating public A record for bastion: %w", err)
+			return fmt.Errorf("new public A record for bastion: %w", err)
 		}
 
 		// Private A record for bastion instance
@@ -421,7 +421,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating private A record for bastion: %w", err)
+			return fmt.Errorf("new private A record for bastion: %w", err)
 		}
 
 		// Routes for bastion instance
@@ -433,7 +433,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				DestinationCidrBlock: pulumi.String("192.168.12.0/24"),
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating bastion route [%s]: %w", routeName, err)
+				return fmt.Errorf("new bastion route [%s]: %w", routeName, err)
 			}
 		}
 
@@ -448,7 +448,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating elastic subnet group: %w", err)
+			return fmt.Errorf("new elastic subnet group: %w", err)
 		}
 
 		// Elastic search
@@ -458,7 +458,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			// 	AwsServiceName: pulumi.String("es.amazonaws.com"),
 			// })
 			// if err != nil {
-			// 	return fmt.Errorf("creating elastic search iam service linked role: %w", err)
+			// 	return fmt.Errorf("new elastic search iam service linked role: %w", err)
 			// }
 
 			es, err := elasticsearch.NewDomain(ctx, "es-domain-"+env.Name, &elasticsearch.DomainArgs{
@@ -488,7 +488,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				},
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating elastic search domain: %w", err)
+				return fmt.Errorf("new elastic search domain: %w", err)
 			}
 
 			esEndpoint = es.Endpoint
@@ -511,7 +511,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating elastic cluster: %w", err)
+			return fmt.Errorf("new elastic cluster: %w", err)
 		}
 
 		// API GW
@@ -522,7 +522,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw: %w", err)
+			return fmt.Errorf("new rest api gw: %w", err)
 		}
 
 		resEvents, err := apigateway.NewResource(ctx, "api-gw-res-events-"+env.Name, &apigateway.ResourceArgs{
@@ -531,7 +531,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			PathPart: pulumi.String("events"),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw resource events: %w", err)
+			return fmt.Errorf("new rest api gw resource events: %w", err)
 		}
 
 		methodEvents, err := apigateway.NewMethod(ctx, "api-gw-method-events-"+env.Name, &apigateway.MethodArgs{
@@ -545,7 +545,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw method events: %w", err)
+			return fmt.Errorf("new rest api gw method events: %w", err)
 		}
 
 		resLogin, err := apigateway.NewResource(ctx, "api-gw-res-login-"+env.Name, &apigateway.ResourceArgs{
@@ -554,7 +554,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			PathPart: pulumi.String("login"),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw resource login: %w", err)
+			return fmt.Errorf("new rest api gw resource login: %w", err)
 		}
 
 		methodLogin, err := apigateway.NewMethod(ctx, "api-gw-method-login-"+env.Name, &apigateway.MethodArgs{
@@ -565,7 +565,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Authorization:  pulumi.String("NONE"),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw method login: %w", err)
+			return fmt.Errorf("new rest api gw method login: %w", err)
 		}
 
 		domainAPIGw, err := apigateway.NewDomainName(ctx, "api-gw-domain-"+env.Name, &apigateway.DomainNameArgs{
@@ -576,7 +576,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			RegionalCertificateArn: certValidationWildcard.CertificateArn,
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw domain: %w", err)
+			return fmt.Errorf("new rest api gw domain: %w", err)
 		}
 
 		_, err = route53.NewRecord(ctx, "record-api-gw-"+env.Name, &route53.RecordArgs{
@@ -589,7 +589,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Ttl:    pulumi.Int(300),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating record for cert validation for wildcard: %w", err)
+			return fmt.Errorf("new record for cert validation for wildcard: %w", err)
 		}
 
 		_, err = apigateway.NewBasePathMapping(ctx, "api-gw-path-"+env.Name, &apigateway.BasePathMappingArgs{
@@ -597,7 +597,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			RestApi:    apigw.ID(),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw base path mapping: %w", err)
+			return fmt.Errorf("new rest api gw base path mapping: %w", err)
 		}
 
 		// ECS Cluster
@@ -605,7 +605,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Name: pulumi.String(env.Name),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating ecs cluster: %w", err)
+			return fmt.Errorf("new ecs cluster: %w", err)
 		}
 
 		roleExecution, err := iam.NewRole(ctx, "role-ecs-cluster-"+env.Name, &iam.RoleArgs{
@@ -618,7 +618,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating role task exec ecs cluster: %w", err)
+			return fmt.Errorf("new role task exec ecs cluster: %w", err)
 		}
 
 		bucketArtifacts, err := s3.NewBucket(ctx, "bucket-codepipeline-"+env.Name, &s3.BucketArgs{
@@ -626,7 +626,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			ForceDestroy: pulumi.Bool(true),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating bucket codepipeline: %w", err)
+			return fmt.Errorf("new bucket codepipeline: %w", err)
 		}
 
 		roleCodepipeline, err := iam.NewRole(ctx, "role-codepipeline-"+env.Name, &iam.RoleArgs{
@@ -639,7 +639,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating role codepipeline: %w", err)
+			return fmt.Errorf("new role codepipeline: %w", err)
 		}
 
 		roleBuildpipeline, err := iam.NewRole(ctx, "role-buildpipeline-"+env.Name, &iam.RoleArgs{
@@ -652,7 +652,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating role buildpipeline: %w", err)
+			return fmt.Errorf("new role buildpipeline: %w", err)
 		}
 
 		// Main load balancer
@@ -669,7 +669,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating main load balancer: %w", err)
+			return fmt.Errorf("new main load balancer: %w", err)
 		}
 
 		tgDefault, err := elasticloadbalancingv2.NewTargetGroup(ctx, "elb-target-group-default-"+env.Name, &elasticloadbalancingv2.TargetGroupArgs{
@@ -680,7 +680,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			VpcId:      vpc.ID(),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating elb default target group: %w", err)
+			return fmt.Errorf("new elb default target group: %w", err)
 		}
 
 		listenerHTTP, err := elasticloadbalancingv2.NewListener(ctx, "elb-listener-http-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
@@ -695,7 +695,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating elb http listener: %w", err)
+			return fmt.Errorf("new elb http listener: %w", err)
 		}
 
 		listenerHTTPS, err := elasticloadbalancingv2.NewListener(ctx, "elb-listener-https-"+env.Name, &elasticloadbalancingv2.ListenerArgs{
@@ -711,7 +711,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			},
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating elb https listener: %w", err)
+			return fmt.Errorf("new elb https listener: %w", err)
 		}
 
 		vpcLinkIDs := make(pulumi.StringMap)
@@ -721,7 +721,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Name: pulumi.Sprintf("%s/%s", env.Name, rsbService.Name),
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating repo [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new repo [%s]: %w", rsbService.Name, err)
 			}
 
 			branch, err := github.NewBranch(ctx, fmt.Sprintf("branch-%s-%s", rsbService.Name, env.Name), &github.BranchArgs{
@@ -731,7 +731,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Repository:   pulumi.String(rsbService.Name),
 			}, pulumi.DeleteBeforeReplace(true), pulumi.Provider(githubProvider))
 			if err != nil {
-				return fmt.Errorf("creating branch [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new branch [%s]: %w", rsbService.Name, err)
 			}
 
 			tg, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("tg-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
@@ -742,7 +742,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				VpcId:      vpc.ID(),
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating elb target group [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new elb target group [%s]: %w", rsbService.Name, err)
 			}
 
 			serviceLoadBalancers := ecs.ServiceLoadBalancerArray{
@@ -758,7 +758,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Max: pulumi.Int(999),
 			})
 			if err != nil {
-				return fmt.Errorf("creating random order integer [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new random order integer [%s]: %w", rsbService.Name, err)
 			}
 
 			randomPriority, err := random.NewRandomInteger(ctx, fmt.Sprintf("random-priority-%s-%s", rsbService.Name, env.Name), &random.RandomIntegerArgs{
@@ -766,7 +766,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Max: pulumi.Int(4095),
 			})
 			if err != nil {
-				return fmt.Errorf("creating random priority integer [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new random priority integer [%s]: %w", rsbService.Name, err)
 			}
 
 			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-http-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
@@ -790,7 +790,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Priority: randomPriority.Result,
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating elb http listener rule [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new elb http listener rule [%s]: %w", rsbService.Name, err)
 			}
 
 			_, err = elasticloadbalancingv2.NewListenerRule(ctx, fmt.Sprintf("rule-https-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.ListenerRuleArgs{
@@ -814,7 +814,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Priority: randomPriority.Result,
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating elb https listener rule [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new elb https listener rule [%s]: %w", rsbService.Name, err)
 			}
 
 			serviceRecord, err := route53.NewRecord(ctx, fmt.Sprintf("record-https-%s-%s", rsbService.Name, env.Name), &route53.RecordArgs{
@@ -827,7 +827,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				Ttl:    pulumi.Int(300),
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating record [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new record [%s]: %w", rsbService.Name, err)
 			}
 
 			serviceRecords[rsbService.Name] = serviceRecord.Fqdn
@@ -844,7 +844,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					},
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("creating network load balancer [%s]: %w", rsbService.Name, err)
+					return fmt.Errorf("new network load balancer [%s]: %w", rsbService.Name, err)
 				}
 
 				tgNLB, err := elasticloadbalancingv2.NewTargetGroup(ctx, fmt.Sprintf("nlb-tcp-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.TargetGroupArgs{
@@ -855,7 +855,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					VpcId:      vpc.ID(),
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("creating nlb target group [%s]: %w", rsbService.Name, err)
+					return fmt.Errorf("new nlb target group [%s]: %w", rsbService.Name, err)
 				}
 
 				serviceLoadBalancers = append(serviceLoadBalancers, ecs.ServiceLoadBalancerArgs{
@@ -876,7 +876,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					},
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("creating nlb http listener [%s]: %w", rsbService.Name, err)
+					return fmt.Errorf("new nlb http listener [%s]: %w", rsbService.Name, err)
 				}
 
 				_, err = elasticloadbalancingv2.NewListener(ctx, fmt.Sprintf("nlb-listener-https-%s-%s", rsbService.Name, env.Name), &elasticloadbalancingv2.ListenerArgs{
@@ -892,7 +892,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					},
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("creating nlb https listener [%s]: %w", rsbService.Name, err)
+					return fmt.Errorf("new nlb https listener [%s]: %w", rsbService.Name, err)
 				}
 
 				vpcLink, err := apigateway.NewVpcLink(ctx, fmt.Sprintf("vpc-link-%s-%s", rsbService.Name, env.Name), &apigateway.VpcLinkArgs{
@@ -900,7 +900,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					TargetArn: nlb.Arn,
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("creating vpc link [%s]: %w", rsbService.Name, err)
+					return fmt.Errorf("new vpc link [%s]: %w", rsbService.Name, err)
 				}
 
 				vpcLinkIDs[rsbService.Name] = vpcLink.ID()
@@ -1066,7 +1066,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				},
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating task definition [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new task definition [%s]: %w", rsbService.Name, err)
 			}
 
 			ecsService, err := ecs.NewService(ctx, fmt.Sprintf("ecs-service-%s-%s", rsbService.Name, env.Name), &ecs.ServiceArgs{
@@ -1089,7 +1089,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				},
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating ecs service [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new ecs service [%s]: %w", rsbService.Name, err)
 			}
 
 			cb, err := codebuild.NewProject(ctx, fmt.Sprintf("cb-project-%s-%s", rsbService.Name, env.Name), &codebuild.ProjectArgs{
@@ -1168,7 +1168,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				SourceVersion: pulumi.String(env.Name),
 			}, pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating codebuild project [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new codebuild project [%s]: %w", rsbService.Name, err)
 			}
 
 			_, err = codepipeline.NewPipeline(ctx, fmt.Sprintf("code-pipeline-%s-%s", rsbService.Name, env.Name), &codepipeline.PipelineArgs{
@@ -1253,7 +1253,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				},
 			}, pulumi.DependsOn([]pulumi.Resource{ecsService, cb}), pulumi.Provider(awsProvider))
 			if err != nil {
-				return fmt.Errorf("creating code pipeline [%s]: %w", rsbService.Name, err)
+				return fmt.Errorf("new code pipeline [%s]: %w", rsbService.Name, err)
 			}
 		}
 
@@ -1272,7 +1272,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Uri: pulumi.Sprintf("https://feeder.services.%s.%s/api/events", env.Name, env.AwsServices.Route53.Domain),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw integration events: %w", err)
+			return fmt.Errorf("new rest api gw integration events: %w", err)
 		}
 
 		integLogin, err := apigateway.NewIntegration(ctx, "api-gw-integ-login-"+env.Name, &apigateway.IntegrationArgs{
@@ -1287,7 +1287,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Uri:                   pulumi.Sprintf("https://users.services.%s.%s/api/login", env.Name, env.AwsServices.Route53.Domain),
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw integration login: %w", err)
+			return fmt.Errorf("new rest api gw integration login: %w", err)
 		}
 
 		_, err = apigateway.NewDeployment(ctx, "api-gw-deployment-"+env.Name, &apigateway.DeploymentArgs{
@@ -1297,7 +1297,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			Description:      pulumi.String("Init"),
 		}, pulumi.DependsOn([]pulumi.Resource{integEvents, integLogin}), pulumi.Provider(awsProvider))
 		if err != nil {
-			return fmt.Errorf("creating rest api gw stage: %w", err)
+			return fmt.Errorf("new rest api gw stage: %w", err)
 		}
 
 		result := pulumi.Map{
