@@ -1127,12 +1127,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("RSB_BASTION_HOST"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.Sprintf("srv.%s.%s", env.Name, env.AwsServices.Route53.Domain),
+							Value: bastionPrivRecord.Fqdn,
 						},
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("RSB_ENV_BASTION_URL"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.Sprintf("http://bastion.%s.%s", env.Name, env.AwsServices.Route53.Domain),
+							Value: pulumi.Sprintf("http://%s", bastionPubRecord.Fqdn),
 						},
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("GITHUBOAUTHTOKEN"),
