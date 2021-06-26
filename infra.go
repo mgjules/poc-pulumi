@@ -357,22 +357,22 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			dbMasterUserPassword = pulumi.String("")
 		}
 
-		rmqMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-rmq-master-user-password-"+env.Name, &random.RandomPasswordArgs{
-			Length:  pulumi.Int(32),
-			Lower:   pulumi.Bool(true),
-			Upper:   pulumi.Bool(true),
-			Special: pulumi.Bool(false),
-		})
-		if err != nil {
-			return fmt.Errorf("creating rmq master user password: %w", err)
-		}
-
-		rmqMasterUserPassword := rmqMasterUserPasswordGenerated.Result.ApplyT(func(result string) string {
-			if env.RsbServices.Broker.Password != "" {
-				return env.RsbServices.Broker.Password
+		var rmqMasterUserPassword pulumi.StringInput
+		if env.RsbServices.Broker.Password == "" {
+			rmqMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-rmq-master-user-password-"+env.Name, &random.RandomPasswordArgs{
+				Length:  pulumi.Int(32),
+				Lower:   pulumi.Bool(true),
+				Upper:   pulumi.Bool(true),
+				Special: pulumi.Bool(false),
+			})
+			if err != nil {
+				return fmt.Errorf("creating rmq master user password: %w", err)
 			}
-			return result
-		}).(pulumi.StringOutput)
+
+			rmqMasterUserPassword = rmqMasterUserPasswordGenerated.Result
+		} else {
+			rmqMasterUserPassword = pulumi.String(env.RsbServices.Broker.Password)
+		}
 
 		UserDataBase64 := pulumi.All(dbMasterUserPassword, rmqMasterUserPassword).ApplyT(func(args []interface{}) string {
 			return base64.StdEncoding.EncodeToString(
