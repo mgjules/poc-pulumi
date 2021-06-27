@@ -54,6 +54,11 @@ func (e *environment) SetDefaults(cfg config) {
 		e.AwsServices.RDS.Username = "admin"
 	}
 
+	if e.AwsServices.Codebuild.Image == "" {
+		// TODO: Image version deprecated
+		e.AwsServices.Codebuild.Image = "aws/codebuild/standard:1.0"
+	}
+
 	if e.RsbServices.CORSOriginURLs == "" {
 		e.RsbServices.CORSOriginURLs = "http://localhost:8080"
 	}

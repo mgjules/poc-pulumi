@@ -1,12 +1,13 @@
 package main
 
 type AwsServices struct {
-	Route53 Route53 `json:"route53"`
-	Bastion Bastion `json:"bastion"`
-	ECS     ECS     `json:"ecs"`
-	ES      ES      `json:"es"`
-	RDS     RDS     `json:"rds"`
-	SNS     SNS     `json:"sns"`
+	Route53   Route53   `json:"route53"`
+	Bastion   Bastion   `json:"bastion"`
+	Codebuild Codebuild `json:"codebuild"`
+	ECS       ECS       `json:"ecs"`
+	ES        ES        `json:"es"`
+	RDS       RDS       `json:"rds"`
+	SNS       SNS       `json:"sns"`
 }
 
 type Route53 struct {
@@ -43,4 +44,8 @@ type SNS struct {
 type SNSSubscription struct {
 	Endpoint string `json:"endpoint"`
 	Protocol string `json:"protocol"`
+}
+
+type Codebuild struct {
+	Image string `json:"image"`
 }
