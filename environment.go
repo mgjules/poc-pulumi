@@ -2,11 +2,19 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 )
 
 type environment struct {
-	Name               string             `json:"name" binding:"required"`
+	Name               string             `json:"name"`
+	AWSAccessKeyID     string             `json:"aws_access_key_id"`
+	AWSSecretAccessKey string             `json:"aws_secret_access_key"`
+	AWSRegion          string             `json:"aws_region"`
+	GithubAuthToken    string             `json:"github_auth_token"`
+	GithubOrgName      string             `json:"github_org_name"`
+	DockerHubUsername  string             `json:"dockerhub_username"`
+	DockerHubPassword  string             `json:"dockerhub_password"`
 	SlackWebHook       string             `json:"slack_webhook"`
 	AwsServices        AwsServices        `json:"aws_services"`
 	RsbServices        RsbServices        `json:"rsb_services"`
@@ -22,6 +30,26 @@ func (e environment) Validate() error {
 }
 
 func (e *environment) SetDefaults(cfg config) {
+	if e.AWSAccessKeyID == "" {
+		e.AWSAccessKeyID = cfg.AWSAccessKeyID
+	}
+
+	if e.AWSSecretAccessKey == "" {
+		e.AWSSecretAccessKey = cfg.AWSSecretAccessKey
+	}
+
+	if e.AWSRegion == "" {
+		e.AWSRegion = "eu-west-1"
+	}
+
+	if e.GithubAuthToken == "" {
+		e.GithubAuthToken = cfg.GithubAuthToken
+	}
+
+	if e.GithubOrgName == "" {
+		e.GithubOrgName = cfg.GithubOrgName
+	}
+
 	if e.AwsServices.Route53.Domain == "" {
 		e.AwsServices.Route53.Domain = cfg.DNSDomain
 	}
@@ -86,6 +114,12 @@ func (e *environment) SetDefaults(cfg config) {
 		if rsbService.SourceBranch == "" && rsbService.SourceCommit == "" {
 			e.RsbServices.Services[i].SourceBranch = "develop"
 		}
+
+		if rsbService.Count > 3 {
+			rsbService.Count = 3
+		} else if rsbService.Count < 0 {
+			rsbService.Count = 0
+		}
 	}
 
 	// Don't even think of running the bus without the services below
@@ -103,5 +137,26 @@ func (e *environment) SetDefaults(cfg config) {
 				Count:        1,
 			})
 		}
+	}
+
+	switch e.ThirdPartyServices.CloudAMQP.InstanceType {
+	case "bunny", "rabbit", "panda", "ape", "hippo", "lion", "toad":
+		// all good
+	default:
+		e.ThirdPartyServices.CloudAMQP.InstanceType = "bunny"
+	}
+
+	if e.ThirdPartyServices.CloudAMQP.InstanceType == "bunny" && e.ThirdPartyServices.CloudAMQP.InstanceNodes != 1 {
+		e.ThirdPartyServices.CloudAMQP.InstanceNodes = 1
+	} else if e.ThirdPartyServices.CloudAMQP.InstanceNodes < 1 || e.ThirdPartyServices.CloudAMQP.InstanceNodes > 3 {
+		e.ThirdPartyServices.CloudAMQP.InstanceNodes = 2
+	}
+
+	if e.ThirdPartyServices.CloudAMQP.InstanceRegion == "" {
+		e.ThirdPartyServices.CloudAMQP.InstanceRegion = fmt.Sprintf("amazon-web-services::%s", e.AWSRegion)
+	}
+
+	if e.ThirdPartyServices.CloudAMQP.InstanceSubnet == "" {
+		e.ThirdPartyServices.CloudAMQP.InstanceSubnet = "10.56.72.0/24"
 	}
 }

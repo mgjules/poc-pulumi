@@ -22,7 +22,6 @@ import (
 func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
-		credentials
 	}
 
 	return func(c *gin.Context) {
@@ -32,18 +31,17 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
-		if err := req.environment.Validate(); err != nil {
+		if err := req.Validate(); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		req.credentials.SetDefaults(cfg)
-		req.environment.SetDefaults(cfg)
+		req.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := req.Name
 
-		s, err := auto.NewStackInlineSource(ctx, envName, _projectName, infra(req.environment, req.credentials), opts...)
+		s, err := auto.NewStackInlineSource(ctx, envName, _projectName, infra(req.environment), opts...)
 		if err != nil {
 			// if stack already exists, 409
 			if auto.IsCreateStack409Error(err) {
@@ -91,7 +89,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 
 func listEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
-		credentials
+		environment
 	}
 
 	return func(c *gin.Context) {
@@ -101,7 +99,7 @@ func listEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerF
 			return
 		}
 
-		req.credentials.SetDefaults(cfg)
+		req.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 
@@ -132,7 +130,7 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -175,7 +173,7 @@ func exportEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -214,7 +212,7 @@ func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -249,7 +247,6 @@ func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
-		credentials
 	}
 
 	return func(c *gin.Context) {
@@ -264,13 +261,12 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 			return
 		}
 
-		req.credentials.SetDefaults(cfg)
 		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(req.environment, req.credentials), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(req.environment), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -341,7 +337,7 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -422,7 +418,7 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -502,7 +498,6 @@ func importEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
 		environment
-		credentials
 	}
 
 	return func(c *gin.Context) {
@@ -517,13 +512,12 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 			return
 		}
 
-		req.credentials.SetDefaults(cfg)
 		req.environment.SetDefaults(cfg)
 
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(req.environment, req.credentials), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(req.environment), opts...)
 		if err != nil {
 			// if stack doesn't already exist, 404
 			if auto.IsSelectStack404Error(err) {
@@ -576,7 +570,7 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		ctx := c.Request.Context()
 		envName := c.Param("name")
 
-		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}, credentials{}), opts...)
+		s, err := auto.SelectStackInlineSource(ctx, envName, _projectName, infra(environment{}), opts...)
 		if err != nil {
 			if auto.IsSelectStack404Error(err) {
 				c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("environment %q not found", envName)})

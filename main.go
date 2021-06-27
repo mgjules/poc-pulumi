@@ -81,5 +81,9 @@ func installPulumiPlugins(ctx context.Context) error {
 		return err
 	}
 
+	if err := w.InstallPlugin(ctx, "cloudamqp", "v3.1.0"); err != nil {
+		return err
+	}
+
 	return nil
 }

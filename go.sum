@@ -196,8 +196,8 @@ github.com/pulumi/pulumi-github/sdk/v4 v4.0.0/go.mod h1:3QZZGqjGqxC6OWGqVc8bLQD9
 github.com/pulumi/pulumi-random/sdk/v4 v4.0.0 h1:O1khaUAtKi4uRwaLX/M11C0sZ55mUb+AYeynjqhCxf0=
 github.com/pulumi/pulumi-random/sdk/v4 v4.0.0/go.mod h1:Z0oFSiqdTS5wChe6qZkzViWRgcSHNGWfL5dw3cHcwh0=
 github.com/pulumi/pulumi/sdk/v3 v3.0.0/go.mod h1:GBHyQ7awNQSRmiKp/p8kIKrGrMOZeA/k2czoM/GOqds=
-github.com/pulumi/pulumi/sdk/v3 v3.1.0 h1:islcQOGiU0QI1Ke0ad462iBG2LVE3m4t5h6cU9QW2gc=
-github.com/pulumi/pulumi/sdk/v3 v3.1.0/go.mod h1:GBHyQ7awNQSRmiKp/p8kIKrGrMOZeA/k2czoM/GOqds=
+github.com/pulumi/pulumi/sdk/v3 v3.3.1 h1:E64NheQ5X2fz3DcQsZ7lDV7js51GNFPnXiXWfPCACnE=
+github.com/pulumi/pulumi/sdk/v3 v3.3.1/go.mod h1:GBHyQ7awNQSRmiKp/p8kIKrGrMOZeA/k2czoM/GOqds=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/sabhiram/go-gitignore v0.0.0-20180611051255-d3107576ba94 h1:G04eS0JkAIVZfaJLjla9dNxkJCPiKIGZlw9AfOhzOD0=

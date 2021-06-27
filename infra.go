@@ -65,20 +65,20 @@ var (
 	_apiGWServices = map[string]bool{"rsb-service-users": true, "rsb-service-feeder": true}
 )
 
-func infra(env environment, cred credentials) pulumi.RunFunc {
+func infra(env environment) pulumi.RunFunc {
 	return func(ctx *pulumi.Context) error {
 		githubProvider, err := github.NewProvider(ctx, "provider-github-"+env.Name, &github.ProviderArgs{
-			Owner: pulumi.String(cred.GithubOrgName),
-			Token: pulumi.String(cred.GithubAuthToken),
+			Owner: pulumi.String(env.GithubOrgName),
+			Token: pulumi.String(env.GithubAuthToken),
 		})
 		if err != nil {
 			return fmt.Errorf("new github provider: %w", err)
 		}
 
 		awsProvider, err := aws.NewProvider(ctx, "provider-aws-"+env.Name, &aws.ProviderArgs{
-			AccessKey: pulumi.String(cred.AWSAccessKeyID),
-			SecretKey: pulumi.String(cred.AWSSecretAccessKey),
-			Region:    pulumi.String(cred.AWSRegion),
+			AccessKey: pulumi.String(env.AWSAccessKeyID),
+			SecretKey: pulumi.String(env.AWSSecretAccessKey),
+			Region:    pulumi.String(env.AWSRegion),
 			DefaultTags: aws.ProviderDefaultTagsArgs{
 				Tags: pulumi.StringMap{
 					"RSB_ENV": pulumi.String(env.Name),
@@ -381,7 +381,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		UserDataBase64 := pulumi.All(dbMasterUserPassword, rmqMasterUserPassword).ApplyT(func(args []interface{}) string {
 			return base64.StdEncoding.EncodeToString(
-				[]byte(fmt.Sprintf("#!/bin/bash\ncd /root\nprintf \"\\nmachine github.com\nlogin roam\npassword %s\" >> .netrc\ngit clone https://github.com/RingierIMU/rsb-deploy.git\necho -n \"%s\" > RMQMasterUserPassword\necho -n \"%s\" > DBMasterUserPassword\necho -n \"%s\" > RSB_Env\necho -n \"%s\" > SLACK_WEBHOOK\ncd ./rsb-deploy/aws/bastion/\n./setup.sh", cred.GithubAuthToken, args[1].(string), args[0].(string), env.Name, env.SlackWebHook)),
+				[]byte(fmt.Sprintf("#!/bin/bash\ncd /root\nprintf \"\\nmachine github.com\nlogin roam\npassword %s\" >> .netrc\ngit clone https://github.com/RingierIMU/rsb-deploy.git\necho -n \"%s\" > RMQMasterUserPassword\necho -n \"%s\" > DBMasterUserPassword\necho -n \"%s\" > RSB_Env\necho -n \"%s\" > SLACK_WEBHOOK\ncd ./rsb-deploy/aws/bastion/\n./setup.sh", env.GithubAuthToken, args[1].(string), args[0].(string), env.Name, env.SlackWebHook)),
 			)
 		}).(pulumi.StringOutput)
 
@@ -504,6 +504,13 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 		if !env.ThirdPartyServices.DataDog.Enabled {
 			ctx.Log.Warn("Datadog not enabled", nil)
+		}
+
+		// CloudAMQP
+		if env.ThirdPartyServices.CloudAMQP.InstanceApiKey != "" && env.ThirdPartyServices.CloudAMQP.UserApiKey != "" {
+			// cloudamqp.NewInstance()
+		} else {
+			ctx.Log.Warn("CloudAMQP not enabled", nil)
 		}
 
 		// Elastic cache cluster
@@ -929,7 +936,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 			).ApplyT(func(args []interface{}) (string, error) {
 				rsbServiceName := args[4].(string)
 
-				baseTaskDef, err := fetchFileFromGithubRepo(cred.GithubOrgName, rsbServiceName, env.Name, "BaseTaskDefinition.json", cred.GithubAuthToken)
+				baseTaskDef, err := fetchFileFromGithubRepo(env.GithubOrgName, rsbServiceName, env.Name, "BaseTaskDefinition.json", env.GithubAuthToken)
 				if err != nil {
 					return "", fmt.Errorf("fetch base task def [%s]: %w", rsbServiceName, err)
 				}
@@ -1008,13 +1015,13 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 					"REPLACEME_LibDBTable":           fmt.Sprintf("%s_%s", env.Name, svcShortName),
 
 					// AWS credentials
-					"REPLACEME_AwsAccessKeyID":     cred.AWSAccessKeyID,
-					"REPLACEME_AwsSecretAccessKey": cred.AWSSecretAccessKey,
-					"REPLACEME_AwsRegion":          cred.AWSRegion,
+					"REPLACEME_AwsAccessKeyID":     env.AWSAccessKeyID,
+					"REPLACEME_AwsSecretAccessKey": env.AWSSecretAccessKey,
+					"REPLACEME_AwsRegion":          env.AWSRegion,
 
 					// Github credentials
-					"REPLACEME_GithubOrgname":    cred.GithubOrgName,
-					"REPLACEME_GithubOauthToken": cred.GithubAuthToken,
+					"REPLACEME_GithubOrgname":    env.GithubOrgName,
+					"REPLACEME_GithubOauthToken": env.GithubAuthToken,
 
 					// Route 53
 					"REPLACEME_DNSZoneID": env.AwsServices.Route53.DNSZoneID,
@@ -1174,17 +1181,17 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("GITHUBOAUTHTOKEN"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.String(cred.GithubAuthToken),
+							Value: pulumi.String(env.GithubAuthToken),
 						},
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("DOCKER_USER"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.String(cred.DockerHubUsername),
+							Value: pulumi.String(env.DockerHubUsername),
 						},
 						codebuild.ProjectEnvironmentEnvironmentVariableArgs{
 							Name:  pulumi.String("DOCKER_PASSWORD"),
 							Type:  pulumi.String("PLAINTEXT"),
-							Value: pulumi.String(cred.DockerHubPassword),
+							Value: pulumi.String(env.DockerHubPassword),
 						},
 					},
 				},
@@ -1199,7 +1206,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				ServiceRole: roleBuildpipeline.Arn,
 				Source: &codebuild.ProjectSourceArgs{
 					GitCloneDepth: pulumi.Int(1),
-					Location:      pulumi.Sprintf("https://github.com/%s/%s.git", cred.GithubOrgName, rsbService.Name),
+					Location:      pulumi.Sprintf("https://github.com/%s/%s.git", env.GithubOrgName, rsbService.Name),
 					Type:          pulumi.String("GITHUB"),
 				},
 				SourceVersion: pulumi.String(env.Name),
@@ -1221,7 +1228,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						Name: pulumi.String("SourceStage"),
 						Actions: codepipeline.PipelineStageActionArray{
 							codepipeline.PipelineStageActionArgs{
-								Region:   pulumi.String(cred.AWSRegion),
+								Region:   pulumi.String(env.AWSRegion),
 								Category: pulumi.String("Source"),
 								Owner:    pulumi.String("ThirdParty"),
 								Provider: pulumi.String("GitHub"),
@@ -1230,11 +1237,11 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 									pulumi.String("source"),
 								},
 								Configuration: pulumi.StringMap{
-									"Owner":                pulumi.String(cred.GithubOrgName),
+									"Owner":                pulumi.String(env.GithubOrgName),
 									"Repo":                 pulumi.String(rsbService.Name),
 									"PollForSourceChanges": pulumi.String("true"),
 									"Branch":               pulumi.String(env.Name),
-									"OAuthToken":           pulumi.String(cred.GithubAuthToken),
+									"OAuthToken":           pulumi.String(env.GithubAuthToken),
 								},
 								Name:     pulumi.String("Source"),
 								RunOrder: pulumi.Int(1),
@@ -1246,7 +1253,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						Name: pulumi.String("BuildStage"),
 						Actions: codepipeline.PipelineStageActionArray{
 							codepipeline.PipelineStageActionArgs{
-								Region:   pulumi.String(cred.AWSRegion),
+								Region:   pulumi.String(env.AWSRegion),
 								Category: pulumi.String("Build"),
 								Owner:    pulumi.String("AWS"),
 								Provider: pulumi.String("CodeBuild"),
@@ -1270,7 +1277,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 						Name: pulumi.String("DeployStage"),
 						Actions: codepipeline.PipelineStageActionArray{
 							codepipeline.PipelineStageActionArgs{
-								Region:   pulumi.String(cred.AWSRegion),
+								Region:   pulumi.String(env.AWSRegion),
 								Category: pulumi.String("Deploy"),
 								Owner:    pulumi.String("AWS"),
 								Provider: pulumi.String("ECS"),

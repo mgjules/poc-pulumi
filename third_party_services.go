@@ -1,8 +1,9 @@
 package main
 
 type ThirdPartyServices struct {
-	DataDog  DataDog  `json:"datadog"`
-	Telegram Telegram `json:"telegram"`
+	DataDog   DataDog   `json:"datadog"`
+	Telegram  Telegram  `json:"telegram"`
+	CloudAMQP CloudAMQP `json:"cloudAMQP"`
 }
 
 type DataDog struct {
@@ -16,4 +17,13 @@ type DataDog struct {
 type Telegram struct {
 	BotID  string `json:"bot_id"`
 	ChatID string `json:"chat_id"`
+}
+
+type CloudAMQP struct {
+	InstanceNodes  int    `json:"instance_nodes"`
+	InstanceRegion string `json:"instance_region"`
+	InstanceSubnet string `json:"instance_subnet"`
+	InstanceType   string `json:"instance_type"`
+	InstanceApiKey string `json:"instance_api_key"`
+	UserApiKey     string `json:"user_api_key"`
 }
