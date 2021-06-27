@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
+	"github.com/avelino/slugify"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/apigateway"
@@ -18,9 +20,11 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticloadbalancingv2"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticsearch"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/iam"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/lambda"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/s3"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/sns"
 	"github.com/pulumi/pulumi-github/sdk/v4/go/github"
 	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -1325,6 +1329,84 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 		}, pulumi.DependsOn([]pulumi.Resource{integEvents, integLogin}), pulumi.Provider(awsProvider))
 		if err != nil {
 			return fmt.Errorf("new rest api gw stage: %w", err)
+		}
+
+		snsTopicName := pulumi.Sprintf("rsb-alerts-%s", env.Name)
+		alertTopic, err := sns.NewTopic(ctx, "topic-alarm-"+env.Name, &sns.TopicArgs{
+			Name:        snsTopicName,
+			DisplayName: snsTopicName,
+		}, pulumi.Provider(awsProvider))
+		if err != nil {
+			return fmt.Errorf("new topic alarm: %w", err)
+		}
+
+		for i, recipient := range env.AwsServices.SNS.Subscriptions {
+			if recipient.Endpoint == "" {
+				ctx.Log.Warn(fmt.Sprintf("endpoint empty for recipient #%d", i+1), nil)
+				continue
+			}
+
+			_, err = sns.NewTopicSubscription(ctx, "topic-sub-"+slugify.Slugify(recipient.Endpoint), &sns.TopicSubscriptionArgs{
+				Topic:    alertTopic.ID(),
+				Endpoint: pulumi.String(recipient.Endpoint),
+				Protocol: pulumi.String(recipient.Protocol),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new topic alarm subscription [%s]: %w", recipient.Endpoint, err)
+			}
+		}
+
+		if env.ThirdPartyServices.Telegram.BotID != "" && env.ThirdPartyServices.Telegram.ChatID != "" {
+			const lambdaName = "rsb-telegram-lambda"
+			lambdaRole, err := iam.NewRole(ctx, fmt.Sprintf("role-%s-%s", env.Name, lambdaName), &iam.RoleArgs{
+				AssumeRolePolicy: pulumi.String(`{"Version": "2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`),
+				Description:      pulumi.Sprintf("%s-%s", lambdaName, strings.ToLower(env.Name)),
+				Path:             pulumi.String("/service-role/"),
+				Name:             pulumi.Sprintf("%s-%s", lambdaName, strings.ToLower(env.Name)),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new role telegram bot [%s]: %w", lambdaName, err)
+			}
+
+			_, err = iam.NewPolicyAttachment(ctx, fmt.Sprintf("role-%s-%s", env.Name, lambdaName), &iam.PolicyAttachmentArgs{
+				PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AWSLambdaFullAccess"),
+				Roles: pulumi.Array{
+					lambdaRole.ID(),
+				},
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new policy attachment telegram bot [%s]: %w", lambdaName, err)
+			}
+
+			lambdaFunc, err := lambda.NewFunction(ctx, fmt.Sprintf("function-lambda-%s-%s", env.Name, lambdaName), &lambda.FunctionArgs{
+				Code:        pulumi.NewFileArchive("static-repositories/rsb-telegram-lambda.zip"),
+				Name:        pulumi.Sprintf("%s-%s", lambdaName, strings.ToLower(env.Name)),
+				Handler:     pulumi.String(lambdaName),
+				Role:        lambdaRole.Arn,
+				Runtime:     pulumi.String("go1.x"),
+				Description: pulumi.String("Send RSB Alerts from Kibana to Telegram"),
+				MemorySize:  pulumi.Int(128),
+				Environment: lambda.FunctionEnvironmentArgs{
+					Variables: pulumi.StringMap{
+						"BOT_ID":  pulumi.String(env.ThirdPartyServices.Telegram.BotID),
+						"CHAT_ID": pulumi.String(env.ThirdPartyServices.Telegram.ChatID),
+					},
+				},
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new lambda function telegram bot [%s]: %w", lambdaName, err)
+			}
+
+			_, err = sns.NewTopicSubscription(ctx, fmt.Sprintf("topic-sub-%s-%s", env.Name, lambdaName), &sns.TopicSubscriptionArgs{
+				Topic:    alertTopic.ID(),
+				Endpoint: lambdaFunc.Arn,
+				Protocol: pulumi.String("lambda"),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new topic subscription telegram bot [%s]: %w", lambdaName, err)
+			}
+		} else {
+			ctx.Log.Warn("telegram bot not created", nil)
 		}
 
 		result := pulumi.Map{

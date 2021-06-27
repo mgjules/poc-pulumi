@@ -6,6 +6,7 @@ type AwsServices struct {
 	ECS     ECS     `json:"ecs"`
 	ES      ES      `json:"es"`
 	RDS     RDS     `json:"rds"`
+	SNS     SNS     `json:"sns"`
 }
 
 type Route53 struct {
@@ -33,4 +34,13 @@ type RDS struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Postgres bool   `json:"postgres"`
+}
+
+type SNS struct {
+	Subscriptions []SNSSubscription `json:"subscriptions"`
+}
+
+type SNSSubscription struct {
+	Endpoint string `json:"endpoint"`
+	Protocol string `json:"protocol"`
 }
