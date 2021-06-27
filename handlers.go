@@ -83,7 +83,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
-			"error": fmt.Sprintf("environment %q is being created", envName),
+			"result": fmt.Sprintf("environment %q is being created", envName),
 		})
 	}
 }
