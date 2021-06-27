@@ -358,6 +358,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				dbMasterUserPassword = pulumi.String(env.AwsServices.RDS.Password)
 			}
 		} else {
+			ctx.Log.Warn("RDS not enabled", nil)
 			dbMasterUserPassword = pulumi.String("")
 		}
 
@@ -497,7 +498,12 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 
 			esEndpoint = es.Endpoint
 		} else {
+			ctx.Log.Warn("ES not enabled", nil)
 			esEndpoint = pulumi.String("")
+		}
+
+		if !env.ThirdPartyServices.DataDog.Enabled {
+			ctx.Log.Warn("Datadog not enabled", nil)
 		}
 
 		// Elastic cache cluster
@@ -1406,7 +1412,7 @@ func infra(env environment, cred credentials) pulumi.RunFunc {
 				return fmt.Errorf("new topic subscription telegram bot [%s]: %w", lambdaName, err)
 			}
 		} else {
-			ctx.Log.Warn("telegram bot not created", nil)
+			ctx.Log.Warn("Telegram bot not created", nil)
 		}
 
 		result := pulumi.Map{
