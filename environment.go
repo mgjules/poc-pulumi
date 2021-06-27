@@ -139,6 +139,10 @@ func (e *environment) SetDefaults(cfg config) {
 		}
 	}
 
+	if e.ThirdPartyServices.CloudAMQP.InstanceName == "" {
+		e.ThirdPartyServices.CloudAMQP.InstanceName = e.Name
+	}
+
 	switch e.ThirdPartyServices.CloudAMQP.InstanceType {
 	case "bunny", "rabbit", "panda", "ape", "hippo", "lion", "toad":
 		// all good
@@ -148,8 +152,6 @@ func (e *environment) SetDefaults(cfg config) {
 
 	if e.ThirdPartyServices.CloudAMQP.InstanceType == "bunny" && e.ThirdPartyServices.CloudAMQP.InstanceNodes != 1 {
 		e.ThirdPartyServices.CloudAMQP.InstanceNodes = 1
-	} else if e.ThirdPartyServices.CloudAMQP.InstanceNodes < 1 || e.ThirdPartyServices.CloudAMQP.InstanceNodes > 3 {
-		e.ThirdPartyServices.CloudAMQP.InstanceNodes = 2
 	}
 
 	if e.ThirdPartyServices.CloudAMQP.InstanceRegion == "" {

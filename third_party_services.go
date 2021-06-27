@@ -20,10 +20,10 @@ type Telegram struct {
 }
 
 type CloudAMQP struct {
+	InstanceName   string `json:"instance_name"`
 	InstanceNodes  int    `json:"instance_nodes"`
 	InstanceRegion string `json:"instance_region"`
 	InstanceSubnet string `json:"instance_subnet"`
 	InstanceType   string `json:"instance_type"`
-	InstanceApiKey string `json:"instance_api_key"`
-	UserApiKey     string `json:"user_api_key"`
+	CustomerApiKey string `json:"customer_api_key"`
 }

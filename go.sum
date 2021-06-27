@@ -191,6 +191,8 @@ github.com/prometheus/procfs v0.0.0-20190507164030-5867b95ac084/go.mod h1:TjEm7z
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
 github.com/pulumi/pulumi-aws/sdk/v4 v4.0.0 h1:hotld6lXp7a1LiPsAgcp3BrGgvj3O/IB5QzdPukyC34=
 github.com/pulumi/pulumi-aws/sdk/v4 v4.0.0/go.mod h1:TCdXM+R0dW0CFco+lb3Q7qRYWmYxDbJ7EPWYzRVHWMw=
+github.com/pulumi/pulumi-cloudamqp/sdk/v3 v3.1.0 h1:+c6U40hFiOoMF1pS99OAILkBiKbzo+QtXvMyMLBdnC8=
+github.com/pulumi/pulumi-cloudamqp/sdk/v3 v3.1.0/go.mod h1:D3ZbOjSnOWnjgXD+yx5Z5kqcwkLV+0jgBzG/LpSmous=
 github.com/pulumi/pulumi-github/sdk/v4 v4.0.0 h1:z7UZYUJizACbhw4/MgeQwGbRfHTeV2VGZAG6ARkKTe0=
 github.com/pulumi/pulumi-github/sdk/v4 v4.0.0/go.mod h1:3QZZGqjGqxC6OWGqVc8bLQD9uqU6soJ4HnVCPGNwOyw=
 github.com/pulumi/pulumi-random/sdk/v4 v4.0.0 h1:O1khaUAtKi4uRwaLX/M11C0sZ55mUb+AYeynjqhCxf0=

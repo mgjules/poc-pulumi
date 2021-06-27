@@ -25,6 +25,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/s3"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/sns"
+	"github.com/pulumi/pulumi-cloudamqp/sdk/v3/go/cloudamqp"
 	"github.com/pulumi/pulumi-github/sdk/v4/go/github"
 	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -507,8 +508,78 @@ func infra(env environment) pulumi.RunFunc {
 		}
 
 		// CloudAMQP
-		if env.ThirdPartyServices.CloudAMQP.InstanceApiKey != "" && env.ThirdPartyServices.CloudAMQP.UserApiKey != "" {
-			// cloudamqp.NewInstance()
+		if env.ThirdPartyServices.CloudAMQP.CustomerApiKey != "" {
+			cloudAMQPProvider, err := cloudamqp.NewProvider(ctx, "provider-cloudamqp-"+env.Name, &cloudamqp.ProviderArgs{
+				Apikey: pulumi.String(env.ThirdPartyServices.CloudAMQP.CustomerApiKey),
+			})
+			if err != nil {
+				return fmt.Errorf("new cloudamqp provider: %w", err)
+			}
+
+			cloudAMQPInstance, err := cloudamqp.NewInstance(ctx, "cloudamqp-instance-"+env.Name, &cloudamqp.InstanceArgs{
+				Name:      pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceName),
+				Nodes:     pulumi.Int(env.ThirdPartyServices.CloudAMQP.InstanceNodes),
+				Plan:      pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceType),
+				Region:    pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceRegion),
+				VpcSubnet: pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceSubnet),
+				Tags: pulumi.StringArray{
+					pulumi.String(env.Name),
+				},
+			}, pulumi.Provider(cloudAMQPProvider))
+			if err != nil {
+				return fmt.Errorf("new cloudamqp instance: %w", err)
+			}
+
+			cloudAMQPInstance.ID().ApplyT(func(id string) error {
+				instanceID, _ := strconv.Atoi(id)
+
+				// CloudAMQP - Extract vpc information
+				cloudAMQPInstanceVPC, err := cloudamqp.GetVpcInfo(ctx, &cloudamqp.GetVpcInfoArgs{
+					InstanceId: instanceID,
+				}, pulumi.Provider(cloudAMQPProvider))
+				if err != nil {
+					return fmt.Errorf("get cloud amqp vpc info: %w", err)
+				}
+
+				//  AWS - Create peering request
+				vpcPeerConn, err := ec2.NewVpcPeeringConnection(ctx, "vpc-peer-conn-cloud-amqp"+env.Name, &ec2.VpcPeeringConnectionArgs{
+					PeerOwnerId: pulumi.String(cloudAMQPInstanceVPC.OwnerId),
+					PeerVpcId:   pulumi.String(cloudAMQPInstanceVPC.Id),
+					VpcId:       vpc.ID(),
+				}, pulumi.Provider(awsProvider))
+				if err != nil {
+					return fmt.Errorf("new vpc peering connection: %w", err)
+				}
+
+				//  CloudAMQP - accept the peering request
+				_, err = cloudamqp.NewVpcPeering(ctx, "cloudamqp-vpc-peering-"+env.Name, &cloudamqp.VpcPeeringArgs{
+					InstanceId: pulumi.Int(instanceID),
+					PeeringId:  vpcPeerConn.ID(),
+				}, pulumi.Provider(cloudAMQPProvider))
+				if err != nil {
+					return fmt.Errorf("new cloudamqp vpc peering: %w", err)
+				}
+
+				_, err = ec2.NewRoute(ctx, "route-vpc-peering-priv-"+env.Name, &ec2.RouteArgs{
+					RouteTableId:           routeTables["rt-"+env.Name+"-"+_subnetGroupPrivate].ID(),
+					DestinationCidrBlock:   pulumi.String(cloudAMQPInstanceVPC.VpcSubnet),
+					VpcPeeringConnectionId: vpcPeerConn.ID(),
+				}, pulumi.Provider(awsProvider))
+				if err != nil {
+					return fmt.Errorf("new route vpc peering private: %w", err)
+				}
+
+				_, err = ec2.NewRoute(ctx, "route-vpc-peering-pub-"+env.Name, &ec2.RouteArgs{
+					RouteTableId:           routeTables["rt-"+env.Name+"-"+_subnetGroupPublic].ID(),
+					DestinationCidrBlock:   pulumi.String(cloudAMQPInstanceVPC.VpcSubnet),
+					VpcPeeringConnectionId: vpcPeerConn.ID(),
+				}, pulumi.Provider(awsProvider))
+				if err != nil {
+					return fmt.Errorf("new route vpc peering public: %w", err)
+				}
+
+				return nil
+			})
 		} else {
 			ctx.Log.Warn("CloudAMQP not enabled", nil)
 		}
