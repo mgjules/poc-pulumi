@@ -530,15 +530,18 @@ func infra(env environment) pulumi.RunFunc {
 				return fmt.Errorf("new cloudamqp instance: %w", err)
 			}
 
-			cloudAMQPInstance.ID().ApplyT(func(id string) error {
-				instanceID, _ := strconv.Atoi(id)
+			cloudAMQPInstance.ID().ApplyT(func(id string) (int, error) {
+				instanceID, err := strconv.Atoi(id)
+				if err != nil {
+					return 0, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
+				}
 
 				// CloudAMQP - Extract vpc information
 				cloudAMQPInstanceVPC, err := cloudamqp.GetVpcInfo(ctx, &cloudamqp.GetVpcInfoArgs{
 					InstanceId: instanceID,
 				}, pulumi.Provider(cloudAMQPProvider))
 				if err != nil {
-					return fmt.Errorf("get cloud amqp vpc info: %w", err)
+					return instanceID, fmt.Errorf("get cloud amqp vpc info: %w", err)
 				}
 
 				//  AWS - Create peering request
@@ -548,7 +551,7 @@ func infra(env environment) pulumi.RunFunc {
 					VpcId:       vpc.ID(),
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("new vpc peering connection: %w", err)
+					return instanceID, fmt.Errorf("new vpc peering connection: %w", err)
 				}
 
 				//  CloudAMQP - accept the peering request
@@ -557,7 +560,7 @@ func infra(env environment) pulumi.RunFunc {
 					PeeringId:  vpcPeerConn.ID(),
 				}, pulumi.Provider(cloudAMQPProvider))
 				if err != nil {
-					return fmt.Errorf("new cloudamqp vpc peering: %w", err)
+					return instanceID, fmt.Errorf("new cloudamqp vpc peering: %w", err)
 				}
 
 				_, err = ec2.NewRoute(ctx, "route-vpc-peering-priv-"+env.Name, &ec2.RouteArgs{
@@ -566,7 +569,7 @@ func infra(env environment) pulumi.RunFunc {
 					VpcPeeringConnectionId: vpcPeerConn.ID(),
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("new route vpc peering private: %w", err)
+					return instanceID, fmt.Errorf("new route vpc peering private: %w", err)
 				}
 
 				_, err = ec2.NewRoute(ctx, "route-vpc-peering-pub-"+env.Name, &ec2.RouteArgs{
@@ -575,7 +578,7 @@ func infra(env environment) pulumi.RunFunc {
 					VpcPeeringConnectionId: vpcPeerConn.ID(),
 				}, pulumi.Provider(awsProvider))
 				if err != nil {
-					return fmt.Errorf("new route vpc peering public: %w", err)
+					return instanceID, fmt.Errorf("new route vpc peering public: %w", err)
 				}
 
 				return nil
