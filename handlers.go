@@ -234,7 +234,7 @@ func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 		pageSize, _ := strconv.Atoi(c.DefaultQuery("pagesize", "0"))
 
-		history, err := s.History(ctx, page, pageSize)
+		history, err := s.History(ctx, pageSize, page)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
