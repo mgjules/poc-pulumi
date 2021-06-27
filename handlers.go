@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -154,8 +155,17 @@ func getEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFu
 			return
 		}
 
+		info, err := s.Info(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"result": outs["result"].Value,
+			"result": gin.H{
+				"outputs": outs["result"].Value,
+				"info":    info,
+			},
 		})
 	}
 }
@@ -221,7 +231,10 @@ func historyEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 		_ = s.SetConfig(ctx, "aws:secretKey", auto.ConfigValue{Value: cfg.AWSSecretAccessKey, Secret: true})
 		_ = s.SetConfig(ctx, "aws:region", auto.ConfigValue{Value: cfg.AWSRegion})
 
-		history, err := s.History(ctx, 0, 0)
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+		pageSize, _ := strconv.Atoi(c.DefaultQuery("pagesize", "0"))
+
+		history, err := s.History(ctx, page, pageSize)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
