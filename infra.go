@@ -641,7 +641,7 @@ func infra(env environment) pulumi.RunFunc {
 			brokerUsername = pulumi.String(env.RsbServices.Broker.Username)
 			brokerPassword = rmqMasterUserPassword
 
-			brokerAdminURL = pulumi.Sprintf("%s:%d", bastionPubRecord.Fqdn, env.RsbServices.Broker.AdminPort)
+			brokerAdminURL = pulumi.Sprintf("http://%s:%d", bastionPrivRecord.Fqdn, env.RsbServices.Broker.AdminPort)
 		}
 
 		// Elastic cache cluster
