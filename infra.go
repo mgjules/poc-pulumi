@@ -344,6 +344,8 @@ func infra(env environment) pulumi.RunFunc {
 
 		var dbMasterUserPassword pulumi.StringInput
 		if env.AwsServices.RDS.Enabled {
+			ctx.Log.Warn("RDS not provisioned: not implemented: not used.", nil)
+
 			if env.AwsServices.RDS.Password == "" {
 				dbMasterUserPasswordGenerated, err := random.NewRandomPassword(ctx, "password-db-master-user-password-"+env.Name, &random.RandomPasswordArgs{
 					Length:  pulumi.Int(32),
@@ -360,7 +362,8 @@ func infra(env environment) pulumi.RunFunc {
 				dbMasterUserPassword = pulumi.String(env.AwsServices.RDS.Password)
 			}
 		} else {
-			ctx.Log.Warn("RDS not enabled", nil)
+			ctx.Log.Warn("RDS not provisioned: disabled.", nil)
+
 			dbMasterUserPassword = pulumi.String("")
 		}
 
@@ -500,12 +503,9 @@ func infra(env environment) pulumi.RunFunc {
 
 			esEndpoint = es.Endpoint
 		} else {
-			ctx.Log.Warn("ES not enabled", nil)
-			esEndpoint = pulumi.String("")
-		}
+			ctx.Log.Warn("ES not provisioned: disabled.", nil)
 
-		if !env.ThirdPartyServices.DataDog.Enabled {
-			ctx.Log.Warn("Datadog not enabled", nil)
+			esEndpoint = pulumi.String("")
 		}
 
 		// CloudAMQP
@@ -633,7 +633,7 @@ func infra(env environment) pulumi.RunFunc {
 				return password
 			}).(pulumi.StringOutput)
 		} else {
-			ctx.Log.Warn("CloudAMQP not enabled", nil)
+			ctx.Log.Warn("CloudAMQP not provisioned: check CustomerApiKey.", nil)
 
 			brokerDriver = pulumi.String(env.RsbServices.Broker.Driver)
 			brokerProtocol = pulumi.String("amqp")
@@ -1218,7 +1218,9 @@ func infra(env environment) pulumi.RunFunc {
 
 				// configure Datadog logging
 				// https://docs.datadoghq.com/integrations/ecs_fargate/#log-collection
-				if env.ThirdPartyServices.DataDog.Enabled {
+				if env.ThirdPartyServices.DataDog.Enabled &&
+					env.ThirdPartyServices.DataDog.ApiKey != "" &&
+					env.ThirdPartyServices.DataDog.LogBaseURL != "" {
 					containerDefinitions.Definitions[0]["logConfiguration"] = map[string]interface{}{
 						"logDriver": "awsfirelens",
 						"options": map[string]interface{}{
@@ -1241,6 +1243,8 @@ func infra(env environment) pulumi.RunFunc {
 						"image": "906394416424.dkr.ecr.eu-west-1.amazonaws.com/aws-for-fluent-bit:latest",
 						"name":  "fluentbit-log-router",
 					})
+				} else {
+					ctx.Log.Warn(fmt.Sprintf("Datadog not provisioned for %q: enable and check ApiKey and LogBaseURL.", rsbServiceName), nil)
 				}
 
 				jsonB, err := json.Marshal(containerDefinitions.Definitions)
@@ -1572,7 +1576,7 @@ func infra(env environment) pulumi.RunFunc {
 				return fmt.Errorf("new topic subscription telegram bot [%s]: %w", lambdaName, err)
 			}
 		} else {
-			ctx.Log.Warn("Telegram bot not created", nil)
+			ctx.Log.Warn("Telegram bot not provisioned: check BotID and ChatID.", nil)
 		}
 
 		result := pulumi.Map{
