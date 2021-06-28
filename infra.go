@@ -542,77 +542,96 @@ func infra(env environment) pulumi.RunFunc {
 				return fmt.Errorf("new cloudamqp instance: %w", err)
 			}
 
-			pulumi.All(
-				cloudAMQPInstance.ID(),
-				cloudAMQPInstance.Url,
-			).ApplyT(func(args []interface{}) (int, error) {
-				instanceID, err := strconv.Atoi(args[0].(string))
+			cloudAMQPInstanceVPCInfo := cloudAMQPInstance.ID().ApplyT(func(id string) (map[string]string, error) {
+				instanceID, err := strconv.Atoi(id)
+				if err != nil {
+					return nil, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
+				}
+
+				// CloudAMQP - Extract vpc information
+				vpcInfo, err := cloudamqp.GetVpcInfo(ctx, &cloudamqp.GetVpcInfoArgs{
+					InstanceId: instanceID,
+				}, pulumi.Provider(cloudAMQPProvider))
+				if err != nil {
+					return nil, fmt.Errorf("get cloud amqp vpc info: %w", err)
+				}
+
+				return map[string]string{
+					"owner_id":   vpcInfo.OwnerId,
+					"vpc_id":     vpcInfo.Id,
+					"vpc_subnet": vpcInfo.VpcSubnet,
+				}, nil
+
+			}).(pulumi.StringMapOutput)
+
+			//  AWS - Create peering request
+			vpcPeerConn, err := ec2.NewVpcPeeringConnection(ctx, "vpc-peer-conn-cloud-amqp"+env.Name, &ec2.VpcPeeringConnectionArgs{
+				PeerOwnerId: cloudAMQPInstanceVPCInfo.MapIndex(pulumi.String("owner_id")),
+				PeerVpcId:   cloudAMQPInstanceVPCInfo.MapIndex(pulumi.String("vpc_id")),
+				VpcId:       vpc.ID(),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new vpc peering connection: %w", err)
+			}
+
+			instanceID := cloudAMQPInstance.ID().ApplyT(func(id string) (int, error) {
+				instanceID, err := strconv.Atoi(id)
 				if err != nil {
 					return 0, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
 				}
 
-				// CloudAMQP - Extract vpc information
-				cloudAMQPInstanceVPC, err := cloudamqp.GetVpcInfo(ctx, &cloudamqp.GetVpcInfoArgs{
-					InstanceId: instanceID,
-				}, pulumi.Provider(cloudAMQPProvider))
-				if err != nil {
-					return instanceID, fmt.Errorf("get cloud amqp vpc info: %w", err)
-				}
-
-				//  AWS - Create peering request
-				vpcPeerConn, err := ec2.NewVpcPeeringConnection(ctx, "vpc-peer-conn-cloud-amqp"+env.Name, &ec2.VpcPeeringConnectionArgs{
-					PeerOwnerId: pulumi.String(cloudAMQPInstanceVPC.OwnerId),
-					PeerVpcId:   pulumi.String(cloudAMQPInstanceVPC.Id),
-					VpcId:       vpc.ID(),
-				}, pulumi.Provider(awsProvider))
-				if err != nil {
-					return instanceID, fmt.Errorf("new vpc peering connection: %w", err)
-				}
-
-				//  CloudAMQP - accept the peering request
-				_, err = cloudamqp.NewVpcPeering(ctx, "cloudamqp-vpc-peering-"+env.Name, &cloudamqp.VpcPeeringArgs{
-					InstanceId: pulumi.Int(instanceID),
-					PeeringId:  vpcPeerConn.ID(),
-				}, pulumi.Provider(cloudAMQPProvider))
-				if err != nil {
-					return instanceID, fmt.Errorf("new cloudamqp vpc peering: %w", err)
-				}
-
-				_, err = ec2.NewRoute(ctx, "route-vpc-peering-priv-"+env.Name, &ec2.RouteArgs{
-					RouteTableId:           routeTables["rt-"+env.Name+"-"+_subnetGroupPrivate].ID(),
-					DestinationCidrBlock:   pulumi.String(cloudAMQPInstanceVPC.VpcSubnet),
-					VpcPeeringConnectionId: vpcPeerConn.ID(),
-				}, pulumi.Provider(awsProvider))
-				if err != nil {
-					return instanceID, fmt.Errorf("new route vpc peering private: %w", err)
-				}
-
-				_, err = ec2.NewRoute(ctx, "route-vpc-peering-pub-"+env.Name, &ec2.RouteArgs{
-					RouteTableId:           routeTables["rt-"+env.Name+"-"+_subnetGroupPublic].ID(),
-					DestinationCidrBlock:   pulumi.String(cloudAMQPInstanceVPC.VpcSubnet),
-					VpcPeeringConnectionId: vpcPeerConn.ID(),
-				}, pulumi.Provider(awsProvider))
-				if err != nil {
-					return instanceID, fmt.Errorf("new route vpc peering public: %w", err)
-				}
-
-				brokerDriver = pulumi.String("rabbitmq")
-				brokerProtocol = pulumi.String("amqps")
-				brokerVhost = pulumi.String(env.Name)
-				brokerPort = pulumi.Int(5672)
-				brokerAdminPort = pulumi.Int(15672)
-
-				rawURL := args[1].(string)
-				parsedURL, _ := url.Parse(rawURL)
-				brokerServer = pulumi.String(strings.Replace(parsedURL.Hostname(), ".rmq.", ".in.", 1))
-				brokerUsername = pulumi.String(parsedURL.User.Username())
-				password, _ := parsedURL.User.Password()
-				brokerPassword = pulumi.String(password)
-
-				brokerAdminURL = pulumi.String(rawURL)
-
 				return instanceID, nil
-			})
+
+			}).(pulumi.IntOutput)
+
+			//  CloudAMQP - accept the peering request
+			_, err = cloudamqp.NewVpcPeering(ctx, "cloudamqp-vpc-peering-"+env.Name, &cloudamqp.VpcPeeringArgs{
+				InstanceId: instanceID,
+				PeeringId:  vpcPeerConn.ID(),
+			}, pulumi.Provider(cloudAMQPProvider))
+			if err != nil {
+				return fmt.Errorf("new cloudamqp vpc peering: %w", err)
+			}
+
+			_, err = ec2.NewRoute(ctx, "route-vpc-peering-priv-"+env.Name, &ec2.RouteArgs{
+				RouteTableId:           routeTables["rt-"+env.Name+"-"+_subnetGroupPrivate].ID(),
+				DestinationCidrBlock:   cloudAMQPInstanceVPCInfo.MapIndex(pulumi.String("vpc_subnet")),
+				VpcPeeringConnectionId: vpcPeerConn.ID(),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new route vpc peering private: %w", err)
+			}
+
+			_, err = ec2.NewRoute(ctx, "route-vpc-peering-pub-"+env.Name, &ec2.RouteArgs{
+				RouteTableId:           routeTables["rt-"+env.Name+"-"+_subnetGroupPublic].ID(),
+				DestinationCidrBlock:   cloudAMQPInstanceVPCInfo.MapIndex(pulumi.String("vpc_subnet")),
+				VpcPeeringConnectionId: vpcPeerConn.ID(),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new route vpc peering public: %w", err)
+			}
+
+			brokerDriver = pulumi.String("rabbitmq")
+			brokerProtocol = pulumi.String("amqps")
+			brokerVhost = pulumi.String(env.Name)
+			brokerPort = pulumi.Int(5672)
+			brokerAdminPort = pulumi.Int(15672)
+
+			brokerServer = cloudAMQPInstance.Url.ApplyT(func(rawURL string) string {
+				parsedURL, _ := url.Parse(rawURL)
+				return strings.Replace(parsedURL.Hostname(), ".rmq.", ".in.", 1)
+			}).(pulumi.StringOutput)
+
+			brokerUsername = cloudAMQPInstance.Url.ApplyT(func(rawURL string) string {
+				parsedURL, _ := url.Parse(rawURL)
+				return parsedURL.User.Username()
+			}).(pulumi.StringOutput)
+
+			brokerPassword = cloudAMQPInstance.Url.ApplyT(func(rawURL string) string {
+				parsedURL, _ := url.Parse(rawURL)
+				password, _ := parsedURL.User.Password()
+				return password
+			}).(pulumi.StringOutput)
 		} else {
 			ctx.Log.Warn("CloudAMQP not enabled", nil)
 
