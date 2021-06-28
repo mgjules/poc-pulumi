@@ -542,15 +542,21 @@ func infra(env environment) pulumi.RunFunc {
 				return fmt.Errorf("new cloudamqp instance: %w", err)
 			}
 
-			cloudAMQPInstanceVPCInfo := cloudAMQPInstance.ID().ApplyT(func(id string) (map[string]string, error) {
+			// Convert instanceID to IntOutput
+			instanceID := cloudAMQPInstance.ID().ApplyT(func(id string) (int, error) {
 				instanceID, err := strconv.Atoi(id)
 				if err != nil {
-					return nil, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
+					return 0, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
 				}
 
-				// CloudAMQP - Extract vpc information
+				return instanceID, nil
+
+			}).(pulumi.IntOutput)
+
+			// CloudAMQP - Extract vpc information
+			cloudAMQPInstanceVPCInfo := instanceID.ApplyT(func(id int) (map[string]string, error) {
 				vpcInfo, err := cloudamqp.GetVpcInfo(ctx, &cloudamqp.GetVpcInfoArgs{
-					InstanceId: instanceID,
+					InstanceId: id,
 				}, pulumi.Provider(cloudAMQPProvider))
 				if err != nil {
 					return nil, fmt.Errorf("get cloud amqp vpc info: %w", err)
@@ -573,16 +579,6 @@ func infra(env environment) pulumi.RunFunc {
 			if err != nil {
 				return fmt.Errorf("new vpc peering connection: %w", err)
 			}
-
-			instanceID := cloudAMQPInstance.ID().ApplyT(func(id string) (int, error) {
-				instanceID, err := strconv.Atoi(id)
-				if err != nil {
-					return 0, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
-				}
-
-				return instanceID, nil
-
-			}).(pulumi.IntOutput)
 
 			//  CloudAMQP - accept the peering request
 			_, err = cloudamqp.NewVpcPeering(ctx, "cloudamqp-vpc-peering-"+env.Name, &cloudamqp.VpcPeeringArgs{
