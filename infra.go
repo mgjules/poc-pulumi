@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -508,6 +509,17 @@ func infra(env environment) pulumi.RunFunc {
 		}
 
 		// CloudAMQP
+		var (
+			brokerDriver    pulumi.StringInput
+			brokerProtocol  pulumi.StringInput
+			brokerVhost     pulumi.StringInput
+			brokerServer    pulumi.StringInput
+			brokerPort      pulumi.IntInput
+			brokerAdminPort pulumi.IntInput
+			brokerAdminURL  pulumi.StringInput
+			brokerUsername  pulumi.StringInput
+			brokerPassword  pulumi.StringInput
+		)
 		if env.ThirdPartyServices.CloudAMQP.CustomerApiKey != "" {
 			cloudAMQPProvider, err := cloudamqp.NewProvider(ctx, "provider-cloudamqp-"+env.Name, &cloudamqp.ProviderArgs{
 				Apikey: pulumi.String(env.ThirdPartyServices.CloudAMQP.CustomerApiKey),
@@ -530,8 +542,11 @@ func infra(env environment) pulumi.RunFunc {
 				return fmt.Errorf("new cloudamqp instance: %w", err)
 			}
 
-			cloudAMQPInstance.ID().ApplyT(func(id string) (int, error) {
-				instanceID, err := strconv.Atoi(id)
+			pulumi.All(
+				cloudAMQPInstance.ID(),
+				cloudAMQPInstance.Url,
+			).ApplyT(func(args []interface{}) (int, error) {
+				instanceID, err := strconv.Atoi(args[0].(string))
 				if err != nil {
 					return 0, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
 				}
@@ -581,10 +596,37 @@ func infra(env environment) pulumi.RunFunc {
 					return instanceID, fmt.Errorf("new route vpc peering public: %w", err)
 				}
 
-				return nil
+				brokerDriver = pulumi.String("rabbitmq")
+				brokerProtocol = pulumi.String("amqps")
+				brokerVhost = pulumi.String(env.Name)
+				brokerPort = pulumi.Int(5672)
+				brokerAdminPort = pulumi.Int(15672)
+
+				rawURL := args[1].(string)
+				parsedURL, _ := url.Parse(rawURL)
+				brokerServer = pulumi.String(strings.Replace(parsedURL.Hostname(), ".rmq.", ".in.", 1))
+				brokerUsername = pulumi.String(parsedURL.User.Username())
+				password, _ := parsedURL.User.Password()
+				brokerPassword = pulumi.String(password)
+
+				brokerAdminURL = pulumi.String(rawURL)
+
+				return instanceID, nil
 			})
 		} else {
 			ctx.Log.Warn("CloudAMQP not enabled", nil)
+
+			brokerDriver = pulumi.String(env.RsbServices.Broker.Driver)
+			brokerProtocol = pulumi.String("amqp")
+			brokerVhost = pulumi.String("")
+			brokerPort = pulumi.Int(env.RsbServices.Broker.Port)
+			brokerAdminPort = pulumi.Int(env.RsbServices.Broker.AdminPort)
+
+			brokerServer = bastionPrivRecord.Fqdn
+			brokerUsername = pulumi.String(env.RsbServices.Broker.Username)
+			brokerPassword = rmqMasterUserPassword
+
+			brokerAdminURL = pulumi.Sprintf("%s:%d", bastionPubRecord.Fqdn, env.RsbServices.Broker.AdminPort)
 		}
 
 		// Elastic cache cluster
@@ -1004,9 +1046,17 @@ func infra(env environment) pulumi.RunFunc {
 				apigw.ID().ToStringOutput(),
 				rsbService.Name,
 				dbMasterUserPassword,
-				rmqMasterUserPassword,
 				bastionPrivRecord.Fqdn,
 				esEndpoint,
+				brokerDriver,
+				brokerProtocol,
+				brokerVhost,
+				brokerServer,
+				brokerPort,
+				brokerAdminPort,
+				brokerAdminURL,
+				brokerUsername,
+				brokerPassword,
 			).ApplyT(func(args []interface{}) (string, error) {
 				rsbServiceName := args[4].(string)
 
@@ -1045,9 +1095,19 @@ func infra(env environment) pulumi.RunFunc {
 				elcHostname := args[2].(*string)
 				apigwID := args[3].(string)
 				dbMasterUserPassword := args[5].(string)
-				rmqMasterUserPassword := args[6].(string)
-				bastionPrivURL := args[7].(string)
-				esEndpoint := args[8].(string)
+				bastionPrivURL := args[6].(string)
+				esEndpoint := args[7].(string)
+
+				// Broker
+				rawBrokerDriver := args[8].(string)
+				rawBrokerProtocol := args[9].(string)
+				rawBrokerVhost := args[10].(string)
+				rawBrokerServer := args[11].(string)
+				rawBrokerPort := args[12].(int)
+				rawBrokerAdminPort := args[13].(int)
+				rawBrokerAdminURL := args[14].(string)
+				rawBrokerUsername := args[15].(string)
+				rawBrokerPassword := args[16].(string)
 
 				mappings := map[string]string{
 					// Bastion
@@ -1070,15 +1130,15 @@ func infra(env environment) pulumi.RunFunc {
 					"REPLACEME_RSBServicesCORSOriginURLs":        fmt.Sprintf("%s,https://admin-ui.services.%s.%s", env.RsbServices.CORSOriginURLs, env.Name, env.AwsServices.Route53.Domain),
 
 					// Message brokers
-					"REPLACEME_MESSAGE_BROKER_DRIVER": env.RsbServices.Broker.Driver,
-					"REPLACEME_RMQServer":             bastionPrivURL,
-					"REPLACEME_RMQMasterUsername":     env.RsbServices.Broker.Username,
-					"REPLACEME_RMQMasterUserPassword": rmqMasterUserPassword,
-					"REPLACEME_RMQAdminURL":           fmt.Sprintf("http://%s:%d", bastionPrivURL, env.RsbServices.Broker.AdminPort),
-					// "REPLACEME_RMQVHost":                         env.RMQVHost,
-					"REPLACEME_MqAMQPPort":        strconv.Itoa(env.RsbServices.Broker.Port),
-					"REPLACEME_MqRabbitAdminPort": strconv.Itoa(env.RsbServices.Broker.AdminPort),
-					"REPLACEME_MqProtocol":        "amqp",
+					"REPLACEME_MESSAGE_BROKER_DRIVER": rawBrokerDriver,
+					"REPLACEME_MqProtocol":            rawBrokerProtocol,
+					"REPLACEME_RMQVHost":              rawBrokerVhost,
+					"REPLACEME_RMQServer":             rawBrokerServer,
+					"REPLACEME_RMQMasterUsername":     rawBrokerUsername,
+					"REPLACEME_RMQMasterUserPassword": rawBrokerPassword,
+					"REPLACEME_MqAMQPPort":            strconv.Itoa(rawBrokerPort),
+					"REPLACEME_MqRabbitAdminPort":     strconv.Itoa(rawBrokerAdminPort),
+					"REPLACEME_RMQAdminURL":           rawBrokerAdminURL,
 
 					// Databases
 					// "REPLACEME_DB_HOST":                          env.DBHostname,
@@ -1498,10 +1558,10 @@ func infra(env environment) pulumi.RunFunc {
 
 		result := pulumi.Map{
 			"name":                  pulumi.String(env.Name),
-			"broker_server":         bastionPrivRecord.Fqdn,
-			"broker_admin_ui":       pulumi.Sprintf("%s:%d", bastionPubRecord.Fqdn, env.RsbServices.Broker.AdminPort),
-			"broker_username":       pulumi.String(env.RsbServices.Broker.Username),
-			"broker_admin_password": rmqMasterUserPassword,
+			"broker_server":         brokerServer,
+			"broker_admin_ui":       brokerAdminURL,
+			"broker_username":       brokerUsername,
+			"broker_admin_password": brokerPassword,
 			"services_routes":       serviceRecords,
 			"slack_webhook":         pulumi.String(env.SlackWebHook),
 			"loadbalancer":          lbMain.DnsName,
