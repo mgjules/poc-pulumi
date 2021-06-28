@@ -696,6 +696,35 @@ func infra(env environment) pulumi.RunFunc {
 			return fmt.Errorf("new rest api gw method events: %w", err)
 		}
 
+		for _, code := range []int{200, 201, 202, 400, 401, 403, 404, 422, 500, 503} {
+			methodEventsResponse, err := apigateway.NewMethodResponse(ctx, fmt.Sprintf("api-gw-method-response-%d-events-%s", code, env.Name), &apigateway.MethodResponseArgs{
+				RestApi:    apigw.ID(),
+				ResourceId: resEvents.ID(),
+				HttpMethod: methodEvents.HttpMethod,
+				StatusCode: pulumi.Sprintf("%d", code),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new events method response [%d]: %w", code, err)
+			}
+
+			_, err = apigateway.NewIntegrationResponse(ctx, fmt.Sprintf("api-gw-integration-response-%d-events-%s", code, env.Name), &apigateway.IntegrationResponseArgs{
+				RestApi:    apigw.ID(),
+				ResourceId: resEvents.ID(),
+				HttpMethod: methodEvents.HttpMethod,
+				StatusCode: methodEventsResponse.StatusCode,
+				SelectionPattern: pulumi.Sprintf("%d", code).ApplyT(func(c string) string {
+					if c == "200" {
+						// Set as default mapping
+						return ""
+					}
+					return c
+				}).(pulumi.StringOutput),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new events integration response [%d]: %w", code, err)
+			}
+		}
+
 		resLogin, err := apigateway.NewResource(ctx, "api-gw-res-login-"+env.Name, &apigateway.ResourceArgs{
 			RestApi:  apigw.ID(),
 			ParentId: apigw.RootResourceId,
@@ -714,6 +743,35 @@ func infra(env environment) pulumi.RunFunc {
 		}, pulumi.Provider(awsProvider))
 		if err != nil {
 			return fmt.Errorf("new rest api gw method login: %w", err)
+		}
+
+		for _, code := range []int{200, 201, 202, 400, 401, 403, 404, 422, 500, 503} {
+			methodLoginResponse, err := apigateway.NewMethodResponse(ctx, fmt.Sprintf("api-gw-method-response-%d-login-%s", code, env.Name), &apigateway.MethodResponseArgs{
+				RestApi:    apigw.ID(),
+				ResourceId: resLogin.ID(),
+				HttpMethod: methodLogin.HttpMethod,
+				StatusCode: pulumi.Sprintf("%d", code),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new login method response [%d]: %w", code, err)
+			}
+
+			_, err = apigateway.NewIntegrationResponse(ctx, fmt.Sprintf("api-gw-integration-response-%d-login-%s", code, env.Name), &apigateway.IntegrationResponseArgs{
+				RestApi:    apigw.ID(),
+				ResourceId: resLogin.ID(),
+				HttpMethod: methodLogin.HttpMethod,
+				StatusCode: methodLoginResponse.StatusCode,
+				SelectionPattern: pulumi.Sprintf("%d", code).ApplyT(func(c string) string {
+					if c == "200" {
+						// Set as default mapping
+						return ""
+					}
+					return c
+				}).(pulumi.StringOutput),
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new login integration response [%d]: %w", code, err)
+			}
 		}
 
 		domainAPIGw, err := apigateway.NewDomainName(ctx, "api-gw-domain-"+env.Name, &apigateway.DomainNameArgs{
