@@ -1,4 +1,4 @@
 name: bus
 runtime: go
 backend:
-  url: s3://poc-pulumi
+  url: s3://rsb-environments
