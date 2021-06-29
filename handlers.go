@@ -85,7 +85,7 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				}
 			}()
 
-			res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout, gzipWriter))
+			res, err := s.Up(ctx, optup.Diff(), optup.ProgressStreams(os.Stdout, gzipWriter))
 			if err != nil {
 				log.Errorf("create env %q: %v", envName, err)
 				msg.WriteString(fmt.Sprintf("Error occured while creating environment %q", envName))
@@ -347,7 +347,7 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 				}
 			}()
 
-			_, err = s.Preview(ctx, optpreview.ProgressStreams(os.Stdout, gzipWriter))
+			_, err = s.Preview(ctx, optpreview.Diff(), optpreview.ProgressStreams(os.Stdout, gzipWriter))
 			if err != nil {
 				log.Errorf("preview env %q: %v", envName, err)
 				msg.WriteString(fmt.Sprintf("Error occured while previewing environment %q", envName))
@@ -603,7 +603,7 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				}
 			}()
 
-			_, err = s.Up(ctx, optup.ProgressStreams(os.Stdout, gzipWriter))
+			_, err = s.Up(ctx, optup.Diff(), optup.ProgressStreams(os.Stdout, gzipWriter))
 			if err != nil {
 				if auto.IsConcurrentUpdateError(err) {
 					msg.WriteString(fmt.Sprintf("Environment %q already has update in progress", envName))
