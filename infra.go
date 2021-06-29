@@ -510,15 +510,16 @@ func infra(env environment) pulumi.RunFunc {
 
 		// CloudAMQP
 		var (
-			brokerDriver    pulumi.StringInput
-			brokerProtocol  pulumi.StringInput
-			brokerVhost     pulumi.StringInput
-			brokerServer    pulumi.StringInput
-			brokerPort      pulumi.IntInput
-			brokerAdminPort pulumi.IntInput
-			brokerAdminURL  pulumi.StringInput
-			brokerUsername  pulumi.StringInput
-			brokerPassword  pulumi.StringInput
+			brokerDriver           pulumi.StringInput
+			brokerProtocol         pulumi.StringInput
+			brokerVhost            pulumi.StringInput
+			brokerServer           pulumi.StringInput
+			brokerPort             pulumi.IntInput
+			brokerAdminPort        pulumi.IntInput
+			brokerAdminURL         pulumi.StringInput
+			brokerAdminInternalURL pulumi.StringInput
+			brokerUsername         pulumi.StringInput
+			brokerPassword         pulumi.StringInput
 		)
 		if env.ThirdPartyServices.CloudAMQP.CustomerApiKey != "" {
 			cloudAMQPProvider, err := cloudamqp.NewProvider(ctx, "provider-cloudamqp-"+env.Name, &cloudamqp.ProviderArgs{
@@ -630,6 +631,7 @@ func infra(env environment) pulumi.RunFunc {
 			}).(pulumi.StringOutput)
 
 			brokerAdminURL = pulumi.Sprintf("https://%s:%d", brokerServer, brokerAdminPort)
+			brokerAdminInternalURL = brokerAdminURL
 		} else {
 			ctx.Log.Warn("CloudAMQP not provisioned: check CustomerApiKey.", nil)
 
@@ -643,7 +645,8 @@ func infra(env environment) pulumi.RunFunc {
 			brokerUsername = pulumi.String(env.RsbServices.Broker.Username)
 			brokerPassword = rmqMasterUserPassword
 
-			brokerAdminURL = pulumi.Sprintf("http://%s:%d", brokerServer, brokerAdminPort)
+			brokerAdminURL = pulumi.Sprintf("http://%s:%d", bastionPubRecord.Fqdn, brokerAdminPort)
+			brokerAdminInternalURL = pulumi.Sprintf("http://%s:%d", brokerServer, brokerAdminPort)
 		}
 
 		// Elastic cache cluster
@@ -1071,7 +1074,7 @@ func infra(env environment) pulumi.RunFunc {
 				brokerServer,
 				brokerPort,
 				brokerAdminPort,
-				brokerAdminURL,
+				brokerAdminInternalURL,
 				brokerUsername,
 				brokerPassword,
 			).ApplyT(func(args []interface{}) (string, error) {
@@ -1122,7 +1125,7 @@ func infra(env environment) pulumi.RunFunc {
 				rawBrokerServer := args[11].(string)
 				rawBrokerPort := args[12].(int)
 				rawBrokerAdminPort := args[13].(int)
-				rawBrokerAdminURL := args[14].(string)
+				rawBrokerAdminInternalURL := args[14].(string)
 				rawBrokerUsername := args[15].(string)
 				rawBrokerPassword := args[16].(string)
 
@@ -1155,7 +1158,7 @@ func infra(env environment) pulumi.RunFunc {
 					"REPLACEME_RMQMasterUserPassword": rawBrokerPassword,
 					"REPLACEME_MqAMQPPort":            strconv.Itoa(rawBrokerPort),
 					"REPLACEME_MqRabbitAdminPort":     strconv.Itoa(rawBrokerAdminPort),
-					"REPLACEME_RMQAdminURL":           rawBrokerAdminURL,
+					"REPLACEME_RMQAdminURL":           rawBrokerAdminInternalURL,
 
 					// Databases
 					// "REPLACEME_DB_HOST":                          env.DBHostname,
