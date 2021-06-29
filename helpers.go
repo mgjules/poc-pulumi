@@ -64,7 +64,7 @@ func sendToSlackWebHook(message string, hookURL string) error {
 
 func createOverview(result map[string]interface{}) string {
 	overview := fmt.Sprintf("ℹ️ Here is an overview of environment *%s*:\n", result["name"])
-	overview += fmt.Sprintf("*RabbitMQ admin:*\n%s (U: %s P: %s)\n", fmt.Sprintf("http(s)://%s/", result["broker_admin_ui"]), result["broker_username"], result["broker_admin_password"])
+	overview += fmt.Sprintf("*RabbitMQ admin:*\n%s (U: %s P: %s)\n", result["broker_admin_ui"], result["broker_username"], result["broker_admin_password"])
 	overview += fmt.Sprintf("*RabbitMQ server:*\n%s (U: %s P: %s)\n", result["broker_server"], result["broker_username"], result["broker_admin_password"])
 
 	overview += "\n\n*Services*\n\n"
