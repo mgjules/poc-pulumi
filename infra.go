@@ -628,6 +628,8 @@ func infra(env environment) pulumi.RunFunc {
 				password, _ := parsedURL.User.Password()
 				return password
 			}).(pulumi.StringOutput)
+
+			brokerAdminURL = pulumi.Sprintf("https://%s:%d", brokerServer, brokerAdminPort)
 		} else {
 			ctx.Log.Warn("CloudAMQP not provisioned: check CustomerApiKey.", nil)
 
@@ -641,7 +643,7 @@ func infra(env environment) pulumi.RunFunc {
 			brokerUsername = pulumi.String(env.RsbServices.Broker.Username)
 			brokerPassword = rmqMasterUserPassword
 
-			brokerAdminURL = pulumi.Sprintf("http://%s:%d", bastionPrivRecord.Fqdn, env.RsbServices.Broker.AdminPort)
+			brokerAdminURL = pulumi.Sprintf("http://%s:%d", brokerServer, brokerAdminPort)
 		}
 
 		// Elastic cache cluster
