@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +21,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	log "github.com/sirupsen/logrus"
 )
+
+const filenameTimeFormat = "20060102T150405Z"
 
 func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.HandlerFunc {
 	type request struct {
@@ -66,19 +71,33 @@ func createEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				req.SlackWebHook,
 			)
 
-			res, err := s.Up(context.Background(), optup.ProgressStreams(os.Stdout))
+			var msg strings.Builder
+			ctx := context.Background()
+
+			inMemoryStore := bytes.NewBuffer([]byte{})
+			gzipWriter, _ := gzip.NewWriterLevel(inMemoryStore, gzip.BestCompression)
+
+			defer func() {
+				gzipWriter.Close()
+
+				if err := uploadLogs(ctx, inMemoryStore, envName, "create", cfg, msg.String(), req.SlackWebHook, start); err != nil {
+					log.Error(err)
+				}
+			}()
+
+			res, err := s.Up(ctx, optup.ProgressStreams(os.Stdout, gzipWriter))
 			if err != nil {
 				log.Errorf("create env %q: %v", envName, err)
-				sendToSlackWebHook(fmt.Sprintf("Error occured while creating environment %q", envName), req.SlackWebHook)
+				msg.WriteString(fmt.Sprintf("Error occured while creating environment %q", envName))
 				return
 			}
 
-			msg := fmt.Sprintf("Created environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
-			log.Infof(msg)
-			sendToSlackWebHook(msg, req.SlackWebHook)
+			success := fmt.Sprintf("Created environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
+			log.Infof(success)
+			msg.WriteString(success)
 
 			result := res.Outputs["result"].Value.(map[string]interface{})
-			sendToSlackWebHook(createOverview(result), req.SlackWebHook)
+			msg.WriteString("\n" + createOverview(result))
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
@@ -314,16 +333,30 @@ func previewEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 				slackWebHook,
 			)
 
-			_, err = s.Preview(context.Background() /*optpreview.Diff(),*/, optpreview.ProgressStreams(os.Stdout))
+			var msg strings.Builder
+			ctx := context.Background()
+
+			inMemoryStore := bytes.NewBuffer([]byte{})
+			gzipWriter, _ := gzip.NewWriterLevel(inMemoryStore, gzip.BestCompression)
+
+			defer func() {
+				gzipWriter.Close()
+
+				if err := uploadLogs(ctx, inMemoryStore, envName, "preview", cfg, msg.String(), req.SlackWebHook, start); err != nil {
+					log.Error(err)
+				}
+			}()
+
+			_, err = s.Preview(ctx, optpreview.ProgressStreams(os.Stdout, gzipWriter))
 			if err != nil {
 				log.Errorf("preview env %q: %v", envName, err)
-				sendToSlackWebHook(fmt.Sprintf("Error occured while previewing environment %q", envName), slackWebHook)
+				msg.WriteString(fmt.Sprintf("Error occured while previewing environment %q", envName))
 				return
 			}
 
-			msg := fmt.Sprintf("Previewed environment %q on Domain %q in %s", envName, domain, time.Since(start))
-			log.Infof(msg)
-			sendToSlackWebHook(msg, slackWebHook)
+			success := fmt.Sprintf("Previewed environment %q on Domain %q in %s", envName, domain, time.Since(start))
+			log.Infof(success)
+			msg.WriteString(success)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
@@ -385,16 +418,30 @@ func refreshEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handl
 				slackWebHook,
 			)
 
-			_, err = s.Refresh(context.Background() /*optrefresh.Diff(),*/, optrefresh.ProgressStreams(os.Stdout))
+			var msg strings.Builder
+			ctx := context.Background()
+
+			inMemoryStore := bytes.NewBuffer([]byte{})
+			gzipWriter, _ := gzip.NewWriterLevel(inMemoryStore, gzip.BestCompression)
+
+			defer func() {
+				gzipWriter.Close()
+
+				if err := uploadLogs(ctx, inMemoryStore, envName, "refresh", cfg, msg.String(), slackWebHook, start); err != nil {
+					log.Error(err)
+				}
+			}()
+
+			_, err = s.Refresh(ctx, optrefresh.ProgressStreams(os.Stdout, gzipWriter))
 			if err != nil {
 				log.Errorf("refresh env %q: %v", envName, err)
-				sendToSlackWebHook(fmt.Sprintf("Error occured while refreshing environment %q", envName), slackWebHook)
+				msg.WriteString(fmt.Sprintf("Error occured while refreshing environment %q", envName))
 				return
 			}
 
-			msg := fmt.Sprintf("Refreshed environment %q on Domain %q in %s", envName, domain, time.Since(start))
-			log.Infof(msg)
-			sendToSlackWebHook(msg, slackWebHook)
+			success := fmt.Sprintf("Refreshed environment %q on Domain %q in %s", envName, domain, time.Since(start))
+			log.Infof(success)
+			msg.WriteString(success)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
@@ -542,21 +589,35 @@ func updateEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				req.SlackWebHook,
 			)
 
-			_, err = s.Up(context.Background() /*optup.Diff(),*/, optup.ProgressStreams(os.Stdout))
+			var msg strings.Builder
+			ctx := context.Background()
+
+			inMemoryStore := bytes.NewBuffer([]byte{})
+			gzipWriter, _ := gzip.NewWriterLevel(inMemoryStore, gzip.BestCompression)
+
+			defer func() {
+				gzipWriter.Close()
+
+				if err := uploadLogs(ctx, inMemoryStore, envName, "update", cfg, msg.String(), req.SlackWebHook, start); err != nil {
+					log.Error(err)
+				}
+			}()
+
+			_, err = s.Up(ctx, optup.ProgressStreams(os.Stdout, gzipWriter))
 			if err != nil {
 				if auto.IsConcurrentUpdateError(err) {
-					sendToSlackWebHook(fmt.Sprintf("Environment %q already has update in progress", envName), req.SlackWebHook)
+					msg.WriteString(fmt.Sprintf("Environment %q already has update in progress", envName))
 					return
 				}
 
 				log.Errorf("update env %q: %v", envName, err)
-				sendToSlackWebHook(fmt.Sprintf("Error occured while updating environment %q", envName), req.SlackWebHook)
+				msg.WriteString(fmt.Sprintf("\nError occured while updating environment %q", envName))
 				return
 			}
 
-			msg := fmt.Sprintf("Updated environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
-			log.Infof(msg)
-			sendToSlackWebHook(msg, req.SlackWebHook)
+			success := fmt.Sprintf("Updated environment %q with %v services on Domain %q in %s", envName, len(req.RsbServices.Services), req.AwsServices.Route53.Domain, time.Since(start))
+			log.Infof(success)
+			msg.WriteString(success)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{
@@ -617,24 +678,35 @@ func deleteEnvironment(cfg config, opts ...auto.LocalWorkspaceOption) gin.Handle
 				slackWebHook,
 			)
 
+			var msg strings.Builder
 			ctx := context.Background()
 
-			if _, err := s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout)); err != nil {
-				// 	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			inMemoryStore := bytes.NewBuffer([]byte{})
+			gzipWriter, _ := gzip.NewWriterLevel(inMemoryStore, gzip.BestCompression)
+
+			defer func() {
+				gzipWriter.Close()
+
+				if err := uploadLogs(ctx, inMemoryStore, envName, "delete", cfg, msg.String(), slackWebHook, start); err != nil {
+					log.Error(err)
+				}
+			}()
+
+			if _, err := s.Destroy(ctx, optdestroy.ProgressStreams(os.Stdout, gzipWriter)); err != nil {
 				log.Errorf("destroy env %q: %v", envName, err)
-				sendToSlackWebHook(fmt.Sprintf("Error occured while deleting environment %q", envName), slackWebHook)
+				msg.WriteString(fmt.Sprintf("Error occured while deleting environment %q", envName))
 				return
 			}
 
 			if err = s.Workspace().RemoveStack(ctx, envName); err != nil {
 				log.Errorf("remove stack env %q: %v", envName, err)
-				sendToSlackWebHook(fmt.Sprintf("Error occured while removing stack for environment %q", envName), slackWebHook)
+				msg.WriteString(fmt.Sprintf("Error occured while removing stack for environment %q", envName))
 				return
 			}
 
-			msg := fmt.Sprintf("Deleted environment %q on Domain %q in %s", envName, domain, time.Since(start))
-			log.Infof(msg)
-			sendToSlackWebHook(msg, slackWebHook)
+			success := fmt.Sprintf("Deleted environment %q on Domain %q in %s", envName, domain, time.Since(start))
+			log.Infof(success)
+			msg.WriteString(success)
 		}()
 
 		c.JSON(http.StatusOK, gin.H{

@@ -2,13 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -73,4 +79,27 @@ func createOverview(result map[string]interface{}) string {
 	}
 
 	return overview
+}
+
+func uploadLogs(ctx context.Context, content io.Reader, envName string, logType string, cfg config, msg, slackWebhooURL string, timeLogged time.Time) error {
+	sess, err := session.NewSession(&aws.Config{
+		Credentials: credentials.NewStaticCredentials(cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, ""),
+		Region:      aws.String(cfg.AWSRegion),
+	})
+	if err != nil {
+		return fmt.Errorf("create new aws session: %v", err)
+	}
+
+	uploader := s3manager.NewUploader(sess)
+
+	result, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+		Bucket: aws.String(strings.ReplaceAll(cfg.BackendURL, "s3://", "")),
+		Key:    aws.String(fmt.Sprintf("logs/%s/%s/%s.log.gz", envName, logType, timeLogged.Format(filenameTimeFormat))),
+		Body:   content,
+	})
+	if err != nil {
+		return fmt.Errorf("upload logs: %v", err)
+	}
+
+	return sendToSlackWebHook(fmt.Sprintf("%s\nView logs: %s", msg, result.Location), slackWebhooURL)
 }
