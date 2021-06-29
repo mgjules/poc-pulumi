@@ -1649,9 +1649,9 @@ func infra(env environment) pulumi.RunFunc {
 			"broker_server":         brokerServer,
 			"broker_admin_ui":       brokerAdminURL,
 			"broker_username":       brokerUsername,
-			"broker_admin_password": brokerPassword,
+			"broker_admin_password": pulumi.ToSecret(brokerPassword),
 			"services_routes":       serviceRecords,
-			"slack_webhook":         pulumi.String(env.SlackWebHook),
+			"slack_webhook":         pulumi.ToSecret(pulumi.String(env.SlackWebHook)),
 			"loadbalancer":          lbMain.DnsName,
 			"domain":                pulumi.String(env.AwsServices.Route53.Domain),
 		}
