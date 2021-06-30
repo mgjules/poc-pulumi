@@ -529,30 +529,55 @@ func infra(env environment) pulumi.RunFunc {
 				return fmt.Errorf("new cloudamqp provider: %w", err)
 			}
 
-			cloudAMQPInstance, err := cloudamqp.NewInstance(ctx, "cloudamqp-instance-"+env.Name, &cloudamqp.InstanceArgs{
-				Name:      pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceName),
-				Nodes:     pulumi.Int(env.ThirdPartyServices.CloudAMQP.InstanceNodes),
-				Plan:      pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceType),
-				Region:    pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceRegion),
-				VpcSubnet: pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceSubnet),
-				Tags: pulumi.StringArray{
-					pulumi.String(env.Name),
-				},
-			}, pulumi.Provider(cloudAMQPProvider))
-			if err != nil {
-				return fmt.Errorf("new cloudamqp instance: %w", err)
-			}
-
-			// Convert instanceID to IntOutput
-			instanceID := cloudAMQPInstance.ID().ApplyT(func(id string) (int, error) {
-				instanceID, err := strconv.Atoi(id)
+			var (
+				instanceID  pulumi.IntOutput
+				instanceURL pulumi.StringOutput
+			)
+			if env.ThirdPartyServices.CloudAMQP.InstanceID == 0 {
+				cloudAMQPInstance, err := cloudamqp.NewInstance(ctx, "cloudamqp-instance-"+env.Name, &cloudamqp.InstanceArgs{
+					Name:      pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceName),
+					Nodes:     pulumi.Int(env.ThirdPartyServices.CloudAMQP.InstanceNodes),
+					Plan:      pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceType),
+					Region:    pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceRegion),
+					VpcSubnet: pulumi.String(env.ThirdPartyServices.CloudAMQP.InstanceSubnet),
+					Tags: pulumi.StringArray{
+						pulumi.String(env.Name),
+					},
+				}, pulumi.Provider(cloudAMQPProvider))
 				if err != nil {
-					return 0, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
+					return fmt.Errorf("new cloudamqp instance: %w", err)
 				}
 
-				return instanceID, nil
+				// Convert instanceID to IntOutput
+				instanceID = cloudAMQPInstance.ID().ApplyT(func(id string) (int, error) {
+					instanceID, err := strconv.Atoi(id)
+					if err != nil {
+						return 0, fmt.Errorf("convert cloudamqp instance id from string to int: %w", err)
+					}
 
-			}).(pulumi.IntOutput)
+					return instanceID, nil
+
+				}).(pulumi.IntOutput)
+
+				instanceURL = cloudAMQPInstance.Url
+			} else {
+				ctx.Log.Warn("CloudAMQP instance not provisioned: instance ID provided.", nil)
+
+				// Convert instanceID to IntOutput
+				instanceID = pulumi.Int(env.ThirdPartyServices.CloudAMQP.InstanceID).ToIntOutput()
+
+				// Retrieve instanceURL from existing instance
+				instanceURL = instanceID.ApplyT(func(id int) (string, error) {
+					cloudAMQPInstance, err := cloudamqp.LookupInstance(ctx, &cloudamqp.LookupInstanceArgs{
+						InstanceId: env.ThirdPartyServices.CloudAMQP.InstanceID,
+					}, pulumi.Provider(cloudAMQPProvider))
+					if err != nil {
+						return "", fmt.Errorf("get cloud amqp url: %w", err)
+					}
+
+					return cloudAMQPInstance.Url, nil
+				}).(pulumi.StringOutput)
+			}
 
 			// CloudAMQP - Extract vpc information
 			cloudAMQPInstanceVPCInfo := instanceID.ApplyT(func(id int) (map[string]string, error) {
@@ -568,7 +593,6 @@ func infra(env environment) pulumi.RunFunc {
 					"vpc_id":     vpcInfo.Id,
 					"vpc_subnet": vpcInfo.VpcSubnet,
 				}, nil
-
 			}).(pulumi.StringMapOutput)
 
 			//  AWS - Create peering request
@@ -614,17 +638,17 @@ func infra(env environment) pulumi.RunFunc {
 			brokerPort = pulumi.Int(5672)
 			brokerAdminPort = pulumi.Int(15672)
 
-			brokerServer = cloudAMQPInstance.Url.ApplyT(func(rawURL string) string {
+			brokerServer = instanceURL.ApplyT(func(rawURL string) string {
 				parsedURL, _ := url.Parse(rawURL)
 				return strings.Replace(parsedURL.Hostname(), ".rmq.", ".in.", 1)
 			}).(pulumi.StringOutput)
 
-			brokerUsername = cloudAMQPInstance.Url.ApplyT(func(rawURL string) string {
+			brokerUsername = instanceURL.ApplyT(func(rawURL string) string {
 				parsedURL, _ := url.Parse(rawURL)
 				return parsedURL.User.Username()
 			}).(pulumi.StringOutput)
 
-			brokerPassword = cloudAMQPInstance.Url.ApplyT(func(rawURL string) string {
+			brokerPassword = instanceURL.ApplyT(func(rawURL string) string {
 				parsedURL, _ := url.Parse(rawURL)
 				password, _ := parsedURL.User.Password()
 				return password

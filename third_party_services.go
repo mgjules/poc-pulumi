@@ -20,6 +20,7 @@ type Telegram struct {
 }
 
 type CloudAMQP struct {
+	InstanceID     int    `json:"instance_id"`
 	InstanceName   string `json:"instance_name"`
 	InstanceNodes  int    `json:"instance_nodes"`
 	InstanceRegion string `json:"instance_region"`
