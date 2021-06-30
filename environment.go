@@ -83,8 +83,7 @@ func (e *environment) SetDefaults(cfg config) {
 	}
 
 	if e.AwsServices.Codebuild.Image == "" {
-		// TODO: Image version deprecated
-		e.AwsServices.Codebuild.Image = "aws/codebuild/standard:1.0"
+		e.AwsServices.Codebuild.Image = "aws/codebuild/standard:5.0"
 	}
 
 	if e.RsbServices.CORSOriginURLs == "" {
