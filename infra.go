@@ -391,7 +391,6 @@ func infra(env environment) pulumi.RunFunc {
 		}).(pulumi.StringOutput)
 
 		// Bastion instance
-		// FIXME: perpetual diff for EbsBlockDevices so using default with AMI
 		bastion, err := ec2.NewInstance(ctx, "ec2-instance-bastion-"+env.Name, &ec2.InstanceArgs{
 			Ami:             pulumi.String(env.AwsServices.Bastion.AMIID),
 			InstanceType:    ec2.InstanceType_T3_Micro,
