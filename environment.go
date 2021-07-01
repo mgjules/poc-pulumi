@@ -82,6 +82,10 @@ func (e *environment) SetDefaults(cfg config) {
 		e.AwsServices.Bastion.VolumeSize = 32
 	}
 
+	if e.AwsServices.MQ.DeploymentMode == "" {
+		e.AwsServices.MQ.DeploymentMode = "SINGLE_INSTANCE"
+	}
+
 	if e.AwsServices.RDS.Username == "" {
 		e.AwsServices.RDS.Username = "admin"
 	}

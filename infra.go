@@ -22,6 +22,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/elasticsearch"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/lambda"
+	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/mq"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/resourcegroups"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/route53"
 	"github.com/pulumi/pulumi-aws/sdk/v4/go/aws/s3"
@@ -510,7 +511,7 @@ func infra(env environment) pulumi.RunFunc {
 			esEndpoint = pulumi.String("")
 		}
 
-		// CloudAMQP
+		// Broker (AmazonMQ/CloudAMQP/BastionRMQ)
 		var (
 			brokerDriver           pulumi.StringInput
 			brokerProtocol         pulumi.StringInput
@@ -523,7 +524,49 @@ func infra(env environment) pulumi.RunFunc {
 			brokerUsername         pulumi.StringInput
 			brokerPassword         pulumi.StringInput
 		)
-		if env.ThirdPartyServices.CloudAMQP.CustomerApiKey != "" {
+		if env.AwsServices.MQ.Enabled {
+			mqBroker, err := mq.NewBroker(ctx, "mq-"+env.Name, &mq.BrokerArgs{
+				AutoMinorVersionUpgrade: pulumi.Bool(true),
+				BrokerName:              pulumi.String(env.Name),
+				DeploymentMode:          pulumi.String(env.AwsServices.MQ.DeploymentMode),
+				EngineType:              pulumi.String("RABBITMQ"),
+				EngineVersion:           pulumi.String("3.8.11"),
+				HostInstanceType:        pulumi.String("mq.t3.micro"),
+				PubliclyAccessible:      pulumi.Bool(false),
+				SecurityGroups: pulumi.StringArray{
+					sg.ID(),
+				},
+				SubnetIds: pulumi.StringArray{
+					subnetGroups[_subnetGroupPrivate][0].ID(),
+				},
+				Users: mq.BrokerUserArray{
+					mq.BrokerUserArgs{
+						Username: pulumi.String(env.RsbServices.Broker.Username),
+						Password: rmqMasterUserPassword,
+					},
+				},
+			}, pulumi.Provider(awsProvider))
+			if err != nil {
+				return fmt.Errorf("new MQ instance: %w", err)
+			}
+
+			brokerDriver = pulumi.String("rabbitmq")
+			brokerProtocol = pulumi.String("amqps")
+			brokerVhost = pulumi.String("")
+			brokerPort = pulumi.Int(5671)
+			brokerAdminPort = pulumi.Int(443)
+
+			brokerUsername = pulumi.String(env.RsbServices.Broker.Username)
+			brokerPassword = rmqMasterUserPassword
+
+			brokerServer = mqBroker.Arn.ApplyT(func(arn string) string {
+				x := strings.Split(arn, ":")
+				return fmt.Sprintf("%s.%s.%s.amazonaws.com", x[7], x[2], x[3])
+			}).(pulumi.StringOutput)
+
+			brokerAdminURL = pulumi.Sprintf("https://%s", brokerServer)
+			brokerAdminInternalURL = brokerAdminURL
+		} else if env.ThirdPartyServices.CloudAMQP.CustomerApiKey != "" {
 			cloudAMQPProvider, err := cloudamqp.NewProvider(ctx, "provider-cloudamqp-"+env.Name, &cloudamqp.ProviderArgs{
 				Apikey: pulumi.String(env.ThirdPartyServices.CloudAMQP.CustomerApiKey),
 			})
@@ -659,6 +702,7 @@ func infra(env environment) pulumi.RunFunc {
 			brokerAdminURL = pulumi.Sprintf("https://%s:%d", brokerServer, brokerAdminPort)
 			brokerAdminInternalURL = brokerAdminURL
 		} else {
+			ctx.Log.Warn("MQ not provisioned: disabled.", nil)
 			ctx.Log.Warn("CloudAMQP not provisioned: check CustomerApiKey.", nil)
 
 			brokerDriver = pulumi.String(env.RsbServices.Broker.Driver)

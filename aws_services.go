@@ -8,6 +8,7 @@ type AwsServices struct {
 	ES        ES        `json:"es"`
 	RDS       RDS       `json:"rds"`
 	SNS       SNS       `json:"sns"`
+	MQ        MQ        `json:"mq"`
 }
 
 type Route53 struct {
@@ -49,4 +50,9 @@ type SNSSubscription struct {
 
 type Codebuild struct {
 	Image string `json:"image"`
+}
+
+type MQ struct {
+	Enabled        bool   `json:"enabled"`
+	DeploymentMode string `json:"deployment_mode"`
 }
