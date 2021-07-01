@@ -1441,7 +1441,7 @@ func infra(env environment) pulumi.RunFunc {
 								Provider: pulumi.String("CodeBuild"),
 								Version:  pulumi.String("1"),
 								Configuration: pulumi.StringMap{
-									"ProjectName": pulumi.Sprintf("%s_%s", env.Name, rsbService.Name),
+									"ProjectName": cb.Name,
 								},
 								InputArtifacts: pulumi.StringArray{
 									pulumi.String("source"),
@@ -1477,7 +1477,7 @@ func infra(env environment) pulumi.RunFunc {
 						},
 					},
 				},
-			}, pulumi.DependsOn([]pulumi.Resource{ecsService, cb}), pulumi.Provider(awsProvider))
+			}, pulumi.DependsOn([]pulumi.Resource{ecsService}), pulumi.Provider(awsProvider))
 			if err != nil {
 				return fmt.Errorf("new code pipeline [%s]: %w", rsbService.Name, err)
 			}
