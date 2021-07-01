@@ -397,6 +397,9 @@ func infra(env environment) pulumi.RunFunc {
 			InstanceType:    ec2.InstanceType_T3_Micro,
 			SubnetId:        subnetGroups[_subnetGroupPublic][0].ID(),
 			SourceDestCheck: pulumi.Bool(false),
+			RootBlockDevice: ec2.InstanceRootBlockDeviceArgs{
+				VolumeSize: pulumi.Int(env.AwsServices.Bastion.VolumeSize),
+			},
 			VpcSecurityGroupIds: pulumi.StringArray{
 				sg.ID(),
 			},

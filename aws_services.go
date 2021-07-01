@@ -16,7 +16,8 @@ type Route53 struct {
 }
 
 type Bastion struct {
-	AMIID string `json:"ami_id"`
+	AMIID      string `json:"ami_id"`
+	VolumeSize int    `json:"volume_size"`
 }
 
 type ECS struct {

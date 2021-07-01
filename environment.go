@@ -78,6 +78,10 @@ func (e *environment) SetDefaults(cfg config) {
 		e.AwsServices.Bastion.AMIID = "ami-08bac620dc84221eb"
 	}
 
+	if e.AwsServices.Bastion.VolumeSize == 0 {
+		e.AwsServices.Bastion.VolumeSize = 32
+	}
+
 	if e.AwsServices.RDS.Username == "" {
 		e.AwsServices.RDS.Username = "admin"
 	}
