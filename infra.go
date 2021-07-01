@@ -566,7 +566,8 @@ func infra(env environment) pulumi.RunFunc {
 
 			brokerAdminURL = pulumi.Sprintf("https://%s", brokerServer)
 			brokerAdminInternalURL = brokerAdminURL
-		} else if env.ThirdPartyServices.CloudAMQP.CustomerApiKey != "" {
+		} else if env.ThirdPartyServices.CloudAMQP.Enabled &&
+			env.ThirdPartyServices.CloudAMQP.CustomerApiKey != "" {
 			cloudAMQPProvider, err := cloudamqp.NewProvider(ctx, "provider-cloudamqp-"+env.Name, &cloudamqp.ProviderArgs{
 				Apikey: pulumi.String(env.ThirdPartyServices.CloudAMQP.CustomerApiKey),
 			})
@@ -703,7 +704,7 @@ func infra(env environment) pulumi.RunFunc {
 			brokerAdminInternalURL = brokerAdminURL
 		} else {
 			ctx.Log.Warn("MQ not provisioned: disabled.", nil)
-			ctx.Log.Warn("CloudAMQP not provisioned: check CustomerApiKey.", nil)
+			ctx.Log.Warn("CloudAMQP not provisioned: enable and check CustomerApiKey.", nil)
 
 			brokerDriver = pulumi.String(env.RsbServices.Broker.Driver)
 			brokerProtocol = pulumi.String("amqp")
@@ -1661,7 +1662,9 @@ func infra(env environment) pulumi.RunFunc {
 			}
 		}
 
-		if env.ThirdPartyServices.Telegram.BotID != "" && env.ThirdPartyServices.Telegram.ChatID != "" {
+		if env.ThirdPartyServices.Telegram.Enabled &&
+			env.ThirdPartyServices.Telegram.BotID != "" &&
+			env.ThirdPartyServices.Telegram.ChatID != "" {
 			const lambdaName = "rsb-telegram-lambda"
 			lambdaRole, err := iam.NewRole(ctx, fmt.Sprintf("role-%s-%s", env.Name, lambdaName), &iam.RoleArgs{
 				AssumeRolePolicy: pulumi.String(`{"Version": "2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`),
@@ -1711,7 +1714,7 @@ func infra(env environment) pulumi.RunFunc {
 				return fmt.Errorf("new topic subscription telegram bot [%s]: %w", lambdaName, err)
 			}
 		} else {
-			ctx.Log.Warn("Telegram bot not provisioned: check BotID and ChatID.", nil)
+			ctx.Log.Warn("Telegram bot not provisioned: enable and check BotID and ChatID.", nil)
 		}
 
 		result := pulumi.Map{

@@ -7,7 +7,7 @@ type ThirdPartyServices struct {
 }
 
 type DataDog struct {
-	Enabled    bool
+	Enabled    bool   `json:"enabled"`
 	ApiKey     string `json:"api_key"`
 	AppKey     string `json:"app_key"`
 	ApiBaseURL string `json:"api_base_url"`
@@ -15,11 +15,13 @@ type DataDog struct {
 }
 
 type Telegram struct {
-	BotID  string `json:"bot_id"`
-	ChatID string `json:"chat_id"`
+	Enabled bool   `json:"enabled"`
+	BotID   string `json:"bot_id"`
+	ChatID  string `json:"chat_id"`
 }
 
 type CloudAMQP struct {
+	Enabled        bool   `json:"enabled"`
 	InstanceID     int    `json:"instance_id"`
 	InstanceName   string `json:"instance_name"`
 	InstanceNodes  int    `json:"instance_nodes"`
