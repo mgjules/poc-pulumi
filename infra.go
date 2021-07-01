@@ -1166,7 +1166,7 @@ func infra(env environment) pulumi.RunFunc {
 					"REPLACEME_VENTURE_CONFIG_SERVICE_BASE_URL": fmt.Sprintf("https://ventureconfig.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 					"REPLACEME_FEEDER_URL":                      fmt.Sprintf("https://feeder.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 					"REPLACEME_USER_SERVICE_BASE_URL":           fmt.Sprintf("https://users.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
-					// "REPLACEME_E2EMON_BASE_URL":                  e2eMonBaseUrl(),
+					"REPLACEME_E2EMON_BASE_URL":                 fmt.Sprintf("https://e2emon.services.%s.%s", env.Name, env.AwsServices.Route53.Domain),
 
 					// RSB Services configs
 					"REPLACEME_VENTURE_CONFIG_SERVICE_CACHE_TAG": fmt.Sprintf("rsb_vc_%s", env.Name),
